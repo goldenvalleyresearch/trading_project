@@ -1,0 +1,85 @@
+# ===============================
+# Environment / Secrets
+# ===============================
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ===============================
+# Node / Next.js
+# ===============================
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.cache/
+
+# ===============================
+# Logs
+# ===============================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# ===============================
+# OS / Editor
+# ===============================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# ===============================
+# Testing / Coverage
+# ===============================
+coverage/
+.nyc_output/
+
+# ===============================
+# Runtime / Temp
+# ===============================
+tmp/
+temp/
+
+# ===============================
+# Python (backend)
+# ===============================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+
+# ===============================
+# Database / Local Data
+# ===============================
+data/
+mongo-data/
+*.sqlite
+*.db
+
+# ===============================
+# Docker
+# ===============================
+docker-compose.override.yml
+*.env.docker
+
+# ===============================
+# Misc
+# ===============================
+*.local
+*.secret
+*.key
+*.pem

@@ -1,0 +1,120 @@
+/* new-frontend/src/componets/StockChart/StockChart.module.css */
+.card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.rangeRow {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rangeBtn {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.rangeBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rangeBtn:active {
+  transform: translateY(1px);
+}
+
+.rangeBtnActive {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.metaRow {
+  margin-top: 10px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  opacity: 0.92;
+}
+
+.metaItem {
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.metaK {
+  opacity: 0.7;
+}
+
+.metaV {
+  font-weight: 650;
+}
+
+.metaRight {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.status {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.statusErr {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.chartWrap {
+  margin-top: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  opacity: 0.72;
+  font-size: 13px;
+  padding: 10px;
+}
+
+.emptyHint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  opacity: 0.9;
+}
