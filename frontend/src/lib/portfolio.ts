@@ -3,7 +3,6 @@ import { apiGet } from "./api";
 import type { TimelineEvent } from "./transparency";
 import type { PositionRow } from "./types";
 
-
 type DashboardLatest = {
   snapshot_as_of: string;
   total_value: number;
@@ -13,25 +12,30 @@ type DashboardLatest = {
   todays_pnl_total: number;
 };
 
+type ApiPosition = {
+  ticker: string;
+  name?: string;
+  quantity: number;
+
+  last_price?: number;
+  market_value?: number;
+  cost_value?: number;
+
+  day_change?: number;
+  day_change_pct?: number;
+  unrealized_pl?: number;
+  unrealized_pl_pct?: number;
+
+  price_as_of?: string | null;
+
+  priceAsOf?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
+};
+
 type ApiPositionsResp = {
   as_of?: string;
-  data: Array<{
-    ticker: string;
-    name?: string;
-    quantity: number;
-
-    last_price?: number;
-    market_value?: number;
-    cost_value?: number;
-
-    day_change?: number;
-    day_change_pct?: number;
-    unrealized_pl?: number;
-    unrealized_pl_pct?: number;
-
-
-    price_as_of?: string | null;
-  }>;
+  data: ApiPosition[];
 };
 
 export type SnapshotCardData = {
@@ -49,10 +53,8 @@ const money = (n: number) =>
 const pct = (decimal: number) =>
   Number.isFinite(decimal) ? `${(decimal * 100).toFixed(2)}%` : "—";
 
-
-
 async function apiGetFallback<T>(paths: string[]): Promise<T> {
-  let lastErr: any = null;
+  let lastErr: unknown = null;
   for (const p of paths) {
     try {
       return await apiGet<T>(p);
@@ -60,10 +62,8 @@ async function apiGetFallback<T>(paths: string[]): Promise<T> {
       lastErr = e;
     }
   }
-  throw lastErr ?? new Error("All fallback endpoints failed");
+  throw (lastErr as any) ?? new Error("All fallback endpoints failed");
 }
-
-
 
 export async function getPortfolioAsOf(): Promise<string> {
   const d = await apiGetFallback<DashboardLatest>([
@@ -99,9 +99,7 @@ export async function getPortfolioSummaryForUI(): Promise<SnapshotCardData> {
   };
 }
 
-export async function getAllocationForUI(): Promise<
-  readonly { label: string; value: string }[]
-> {
+export async function getAllocationForUI(): Promise<readonly { label: string; value: string }[]> {
   const d = await apiGetFallback<DashboardLatest>([
     "/api/history/dashboard-latest",
     "/history/dashboard-latest",
@@ -122,7 +120,7 @@ export async function getAllocationForUI(): Promise<
 }
 
 export async function getPositionsForUI(): Promise<PositionRow[]> {
-  let r: any;
+  let r: ApiPositionsResp;
 
   try {
     r = await apiGet<ApiPositionsResp>("/api/portfolio/positions");
@@ -139,7 +137,7 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
     ]);
   }
 
-  const data = Array.isArray(r?.data) ? r.data : [];
+  const data: ApiPosition[] = Array.isArray(r?.data) ? r.data : [];
 
   const latest = await apiGetFallback<DashboardLatest>([
     "/api/history/dashboard-latest",
@@ -147,7 +145,7 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
   ]);
   const total = Number(latest.total_value);
 
-  return data.map((p) => {
+  return data.map((p: ApiPosition) => {
     const value = Number(p.market_value ?? 0);
     const price = Number(p.last_price ?? 0);
     const qty = Number(p.quantity ?? 0);
@@ -159,11 +157,7 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
       Number.isFinite(value) && Number.isFinite(total) && total > 0 ? value / total : NaN;
 
     const price_as_of =
-      (p as any).price_as_of ??
-      (p as any).priceAsOf ??
-      (p as any).updated_at ??
-      (p as any).updatedAt ??
-      null;
+      p.price_as_of ?? p.priceAsOf ?? p.updated_at ?? p.updatedAt ?? null;
 
     return {
       symbol: p.ticker,
@@ -178,13 +172,10 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
         unrealPct === null || typeof p.unrealized_pl !== "number"
           ? "—"
           : `${money(p.unrealized_pl)} (${pct(unrealPct)})`,
-
       price_as_of,
-    } as any;
+    } as PositionRow;
   });
 }
-
-
 
 export const PORTFOLIO_ACTIVITY: readonly TimelineEvent[] = [
   {

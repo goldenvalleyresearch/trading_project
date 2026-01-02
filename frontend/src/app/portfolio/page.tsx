@@ -14,6 +14,7 @@ import {
   getPositionsForUI,
 } from "../../lib/portfolio";
 
+
 const EMPTY_SUMMARY = {
   note: "No snapshot ingested yet. Upload a positions CSV to create the first snapshot.",
   href: "/transparency",
@@ -115,7 +116,7 @@ export default async function PortfolioPage() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={LINKS} ctaLabel="View Live" ctaHref="/portfolio" />
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
         <section className={styles.top}>

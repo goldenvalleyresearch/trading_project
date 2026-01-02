@@ -327,7 +327,7 @@ export default function UploadPage() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={LINKS} ctaLabel="Portfolio" ctaHref="/portfolio" />
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
         <div className={styles.wrap}>

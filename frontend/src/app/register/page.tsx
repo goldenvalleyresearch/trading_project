@@ -84,7 +84,7 @@ export default function RegisterPage() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={LINKS} ctaLabel="View Live" ctaHref="/portfolio" />
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
         <section className={styles.hero}>

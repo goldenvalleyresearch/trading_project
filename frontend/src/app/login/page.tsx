@@ -69,7 +69,8 @@ export default function LoginPage() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={LINKS} ctaLabel="View Live" ctaHref="/portfolio" />
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
+    <a className={styles.ghostBtn} href="/portfolio">View Live</a>
 
       <main className={styles.main}>
         <section className={styles.hero}>

@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import Header from "../../componets/Header_bar/Header_bar";
-import EquityPreview, { RangeKey } from "../../componets/EquityPreview/EquityPreview";
+import EquityPreview from "../../componets/EquityPreview/EquityPreview";
 import FeatureCard from "../../componets/FeatureCard/FeatureCard";
 import Footer from "../../componets/Footer/Footer";
 import { BRAND_NAME, LINKS } from "../../lib/site";
 import { apiGet } from "../../lib/api";
 
 type EquityPoint = { d: string; v: number };
+type RangeKey = "1M" | "3M" | "1Y" | "ALL";
 
 function pctStr(x: number | null | undefined): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return "—";
@@ -167,7 +168,7 @@ export default function PerformancePage() {
   }, [range]);
 
   const updatedOn =
-    apiUpdated !== "—" ? apiUpdated : (rawPoints.length ? rawPoints[rawPoints.length - 1].d : "—");
+    apiUpdated !== "—" ? apiUpdated : rawPoints.length ? rawPoints[rawPoints.length - 1].d : "—";
 
   const cagr = useMemo(() => computeCAGR(rawPoints), [rawPoints]);
   const maxDD = useMemo(() => computeMaxDrawdown(rawPoints), [rawPoints]);
@@ -180,7 +181,7 @@ export default function PerformancePage() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={LINKS} ctaLabel="View Live" ctaHref="/portfolio" />
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
         <section className={styles.top}>
@@ -207,17 +208,39 @@ export default function PerformancePage() {
 
             <div className={styles.controls}>
               <div className={styles.range}>
-                <button className={`${styles.rangeBtn} ${range === "1M" ? styles.rangeActive : ""}`} onClick={() => setRange("1M")} type="button">1M</button>
-                <button className={`${styles.rangeBtn} ${range === "3M" ? styles.rangeActive : ""}`} onClick={() => setRange("3M")} type="button">3M</button>
-                <button className={`${styles.rangeBtn} ${range === "1Y" ? styles.rangeActive : ""}`} onClick={() => setRange("1Y")} type="button">1Y</button>
-                <button className={`${styles.rangeBtn} ${range === "ALL" ? styles.rangeActive : ""}`} onClick={() => setRange("ALL")} type="button">All</button>
+                <button
+                  className={`${styles.rangeBtn} ${range === "1M" ? styles.rangeActive : ""}`}
+                  onClick={() => setRange("1M")}
+                  type="button"
+                >
+                  1M
+                </button>
+                <button
+                  className={`${styles.rangeBtn} ${range === "3M" ? styles.rangeActive : ""}`}
+                  onClick={() => setRange("3M")}
+                  type="button"
+                >
+                  3M
+                </button>
+                <button
+                  className={`${styles.rangeBtn} ${range === "1Y" ? styles.rangeActive : ""}`}
+                  onClick={() => setRange("1Y")}
+                  type="button"
+                >
+                  1Y
+                </button>
+                <button
+                  className={`${styles.rangeBtn} ${range === "ALL" ? styles.rangeActive : ""}`}
+                  onClick={() => setRange("ALL")}
+                  type="button"
+                >
+                  All
+                </button>
               </div>
 
               <div className={styles.benchmark}>
                 <span className={styles.benchmarkLabel}>Benchmark</span>
-                <span className={styles.badge}>
-                  SPY{spyErr ? " (off)" : ""}
-                </span>
+                <span className={styles.badge}>SPY{spyErr ? " (off)" : ""}</span>
               </div>
             </div>
           </div>
@@ -235,17 +258,44 @@ export default function PerformancePage() {
           </div>
 
           <div className={styles.statsRow}>
-            <div className={styles.stat}><div className={styles.k}>CAGR</div><div className={styles.v}>{pctStr(cagr)}</div></div>
-            <div className={styles.stat}><div className={styles.k}>Max drawdown</div><div className={styles.v}>{pctStr(maxDD)}</div></div>
-            <div className={styles.stat}><div className={styles.k}>vs SPY</div><div className={styles.v}>{pctStr(vsSPY)}</div></div>
-            <div className={styles.stat}><div className={styles.k}>Sharpe</div><div className={styles.v}>{numStr(sharpe, 2)}</div></div>
+            <div className={styles.stat}>
+              <div className={styles.k}>CAGR</div>
+              <div className={styles.v}>{pctStr(cagr)}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.k}>Max drawdown</div>
+              <div className={styles.v}>{pctStr(maxDD)}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.k}>vs SPY</div>
+              <div className={styles.v}>{pctStr(vsSPY)}</div>
+            </div>
+            <div className={styles.stat}>
+              <div className={styles.k}>Sharpe</div>
+              <div className={styles.v}>{numStr(sharpe, 2)}</div>
+            </div>
           </div>
         </section>
 
         <section className={styles.grid}>
-          <FeatureCard title="Portfolio" body="Holdings, weights, and cash with clean tables that load fast." href="/portfolio" linkLabel="Open portfolio" />
-          <FeatureCard title="Newsletter" body="Weekly digest + trade notes, written for audit and clarity." href="/newsletter" linkLabel="Read newsletter" />
-          <FeatureCard title="Transparency" body="Receipts-style timeline for snapshots, updates, and decisions." href="/transparency" linkLabel="View timeline" />
+          <FeatureCard
+            title="Portfolio"
+            body="Holdings, weights, and cash with clean tables that load fast."
+            href="/portfolio"
+            linkLabel="Open portfolio"
+          />
+          <FeatureCard
+            title="Newsletter"
+            body="Weekly digest + trade notes, written for audit and clarity."
+            href="/newsletter"
+            linkLabel="Read newsletter"
+          />
+          <FeatureCard
+            title="Transparency"
+            body="Receipts-style timeline for snapshots, updates, and decisions."
+            href="/transparency"
+            linkLabel="View timeline"
+          />
         </section>
       </main>
 
