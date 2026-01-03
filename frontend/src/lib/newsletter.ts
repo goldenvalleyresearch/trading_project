@@ -10,21 +10,26 @@ export type SubscribeResp = {
 };
 
 export function isValidEmail(email: string): boolean {
-  const e = email.trim();
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 export async function subscribeNewsletter(email: string): Promise<SubscribeResp> {
   const e = email.trim();
 
+  if (!isValidEmail(e)) {
+    throw new Error("Invalid email address");
+  }
+
   const res = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     cache: "no-store",
     body: JSON.stringify({ email: e }),
   });
 
   const contentType = res.headers.get("content-type") || "";
+
   if (!res.ok) {
     if (contentType.includes("application/json")) {
       const j: any = await res.json().catch(() => null);

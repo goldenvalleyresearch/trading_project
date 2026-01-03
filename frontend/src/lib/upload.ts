@@ -1,6 +1,34 @@
 // src/lib/upload.ts
 import { apiGet, apiPostForm, ApiError } from "./api";
 
+
+export type UploadKey = "positions" | "performance" | "fundamentals" | "factors";
+
+export type UploadResp =
+  | { ok: true; message?: string; stored_as?: string; filename?: string }
+  | { ok?: false; detail?: any; error?: string; message?: string };
+
+export type ResearchFileItem = {
+  kind?: string;
+  type?: string;
+  name?: string;
+  filename?: string;
+  stored_as?: string;
+  key?: string;
+  as_of?: string;
+  uploaded_at?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type EquityCurveResp = { series?: Array<{ date?: string; balance?: number }> };
+export type LatestResp = { snapshot_as_of?: string };
+
+export type NewsletterSendResp =
+  | { ok: true; sent?: number; skipped?: number; message?: string }
+  | { ok?: false; detail?: any; error?: string; message?: string };
+
+
 const ME_ENDPOINT = "/api/auth/me";
 
 export type AdminGateResult =
@@ -57,12 +85,13 @@ export async function gateUploadPage(opts?: {
   return false;
 }
 
+
+
 function mustIsoDate(asOf: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
     throw new Error("as_of must be YYYY-MM-DD");
   }
 }
-
 
 export type ResearchUploadKind = "fundamentals" | "factors";
 
@@ -87,10 +116,8 @@ export async function uploadResearchFile(args: {
   form.append("file", file, file.name);
 
   const path = `/api/research/upload/${kind}?as_of=${encodeURIComponent(asOf)}`;
-
   return await apiPostForm<ResearchUploadResp>(path, form);
 }
-
 
 export type IngestPositionsResp = {
   as_of: string;
@@ -117,7 +144,9 @@ export async function uploadPositions(args: {
   return await apiPostForm<IngestPositionsResp>(path, form);
 }
 
-export async function uploadPerformance(args: { file: File }): Promise<IngestPerformanceResp> {
+export async function uploadPerformance(args: {
+  file: File;
+}): Promise<IngestPerformanceResp> {
   const { file } = args;
 
   const form = new FormData();
@@ -131,7 +160,6 @@ export async function uploadPerformance(args: { file: File }): Promise<IngestPer
 
 export function prettyApiError(e: unknown): string {
   const err = e as ApiError;
-
   const data = (err && typeof err === "object" && "data" in err ? (err as any).data : null) as any;
 
   if (data && typeof data === "object" && Array.isArray(data.detail)) {
@@ -144,5 +172,5 @@ export function prettyApiError(e: unknown): string {
   if (data && typeof data === "object" && typeof data.detail === "string") return data.detail;
   if (data && typeof data === "object" && typeof data.message === "string") return data.message;
 
-  return err?.message || "Upload failed.";
+  return err?.message || "Request failed.";
 }

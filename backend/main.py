@@ -48,8 +48,8 @@ app.include_router(ingest.router)
 app.include_router(portfolio.router)
 app.include_router(history.router)
 app.include_router(newsletter.router)
+app.include_router(newsletter.admin_router)
 app.include_router(research.router)
-app.include_router(auth.router)
 
 @app.get("/")
 async def root():

@@ -69,6 +69,13 @@ COOKIE_SAMESITE=lax
 
 BCRYPT_ROUNDS=12
 
+BREVO_API_KEY=
+
+BREVO_FROM_EMAIL=
+
+PUBLIC_APP_URL = (site domain)
+
+
 ---
 
 ## Authentication

@@ -6,30 +6,16 @@ import styles from "./page.module.css";
 import Header from "../../componets/Header_bar/Header_bar";
 import Footer from "../../componets/Footer/Footer";
 import { BRAND_NAME, LINKS } from "../../lib/site";
-import { apiGet, apiPostForm } from "../../lib/api";
-import { gateUploadPage } from "../../lib/upload";
-
-type UploadKey = "positions" | "performance" | "fundamentals" | "factors";
-
-type UploadResp =
-  | { ok: true; message?: string; stored_as?: string; filename?: string }
-  | { ok?: false; detail?: any; error?: string; message?: string };
-
-type ResearchFileItem = {
-  kind?: string;
-  type?: string;
-  name?: string;
-  filename?: string;
-  stored_as?: string;
-  key?: string;
-  as_of?: string;
-  uploaded_at?: string;
-  created_at?: string;
-  updated_at?: string;
-};
-
-type EquityCurveResp = { series?: Array<{ date?: string; balance?: number }> };
-type LatestResp = { snapshot_as_of?: string };
+import { apiGet, apiPost, apiPostForm } from "../../lib/api";
+import {
+  gateUploadPage,
+  type UploadKey,
+  type UploadResp,
+  type ResearchFileItem,
+  type EquityCurveResp,
+  type LatestResp,
+  type NewsletterSendResp,
+} from "../../lib/upload";
 
 const ENDPOINTS: Record<UploadKey, string> = {
   positions: "/api/ingest/positions",
@@ -38,7 +24,6 @@ const ENDPOINTS: Record<UploadKey, string> = {
   factors: "/api/research/upload/factors",
 };
 
-/** ✅ clearer titles */
 const TITLES: Record<UploadKey, string> = {
   positions: "Positions (Holdings Snapshot)",
   performance: "Performance (Balance History)",
@@ -46,7 +31,6 @@ const TITLES: Record<UploadKey, string> = {
   factors: "Factors (Research Data)",
 };
 
-/** ✅ clearer descriptions */
 const PURPOSE: Record<UploadKey, string> = {
   positions:
     "Upload your CURRENT holdings snapshot (what you own right now). This feeds the Portfolio holdings table.",
@@ -58,7 +42,6 @@ const PURPOSE: Record<UploadKey, string> = {
     "Upload your factor grades/ratings export (Seeking Alpha / etc). This feeds the Research table (factors).",
 };
 
-/** ✅ clearer “Expected” hints */
 const EXPECTS: Record<UploadKey, string[]> = {
   positions: [
     "One row per holding/ticker (ex: VOO, QQQ, AAPL).",
@@ -77,8 +60,16 @@ const EXPECTS: Record<UploadKey, string[]> = {
 const ACCEPT =
   ".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+const EXAMPLES: Record<UploadKey, string> = {
+  positions: 'Example file: "Holdings.csv" with columns like: Symbol, Shares, Price, Value',
+  performance:
+    'Example file: "Roth_Balance_History.csv" with columns like: Date, Roth Balance (and maybe Dollar Change)',
+  fundamentals: 'Example file: "SA_Fundamentals_YYYY-MM-DD.csv" (export)',
+  factors: 'Example file: "SA_Factors_YYYY-MM-DD.csv" (export)',
+};
+
 function pickMsg(x: unknown): string {
-  if (!x || typeof x !== "object") return "Upload failed.";
+  if (!x || typeof x !== "object") return "Request failed.";
   const o = x as Record<string, any>;
 
   if (Array.isArray(o.detail)) {
@@ -96,7 +87,7 @@ function pickMsg(x: unknown): string {
     (typeof o.detail === "string" && o.detail) ||
     (typeof o.error === "string" && o.error) ||
     (typeof o.message === "string" && o.message) ||
-    "Upload failed."
+    "Request failed."
   );
 }
 
@@ -124,7 +115,13 @@ function prettyFileName(name: string) {
 }
 
 function pickTs(x: ResearchFileItem): string | null {
-  return safeDate(x.as_of) || safeDate(x.uploaded_at) || safeDate(x.updated_at) || safeDate(x.created_at) || null;
+  return (
+    safeDate(x.as_of) ||
+    safeDate(x.uploaded_at) ||
+    safeDate(x.updated_at) ||
+    safeDate(x.created_at) ||
+    null
+  );
 }
 
 function pickName(x: ResearchFileItem): string | null {
@@ -139,14 +136,6 @@ function matchResearchKind(item: ResearchFileItem, want: UploadKey): boolean {
   if (want === "factors") return k.includes("factor") || n.includes("factor");
   return false;
 }
-
-
-const EXAMPLES: Record<UploadKey, string> = {
-  positions: 'Example file: "Holdings.csv" with columns like: Symbol, Shares, Price, Value',
-  performance: 'Example file: "Roth_Balance_History.csv" with columns like: Date, Roth Balance (and maybe Dollar Change)',
-  fundamentals: 'Example file: "SA_Fundamentals_YYYY-MM-DD.csv" (export)',
-  factors: 'Example file: "SA_Factors_YYYY-MM-DD.csv" (export)',
-};
 
 export default function UploadPage() {
   const [allowed, setAllowed] = useState(false);
@@ -168,9 +157,12 @@ export default function UploadPage() {
     factors: useRef<HTMLInputElement | null>(null),
   };
 
-  const keys = useMemo(() => ["positions", "performance", "fundamentals", "factors"] as UploadKey[], []);
+  const keys = useMemo(
+    () => ["positions", "performance", "fundamentals", "factors"] as UploadKey[],
+    []
+  );
 
-  const [busy, setBusy] = useState<UploadKey | null>(null);
+  const [busy, setBusy] = useState<UploadKey | "newsletter" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
@@ -194,6 +186,11 @@ export default function UploadPage() {
     fundamentals: todayIso(),
     factors: todayIso(),
   });
+
+  const [nlSubject, setNlSubject] = useState("");
+  const [nlBody, setNlBody] = useState("");
+  const [nlTestEmail, setNlTestEmail] = useState("");
+  const [nlLastSent, setNlLastSent] = useState<string | null>(null);
 
   function ensureIso(d: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error("as_of must be YYYY-MM-DD");
@@ -223,7 +220,8 @@ export default function UploadPage() {
 
     try {
       const eq = await apiGet<EquityCurveResp>("/api/portfolio/equity-curve?window=1");
-      const lastPoint = Array.isArray(eq?.series) && eq.series.length ? eq.series[eq.series.length - 1] : null;
+      const lastPoint =
+        Array.isArray(eq?.series) && eq.series.length ? eq.series[eq.series.length - 1] : null;
       const d = safeDate(lastPoint?.date);
       if (d) next.performance = { date: d, file: "equity curve" };
     } catch {}
@@ -278,7 +276,6 @@ export default function UploadPage() {
 
     try {
       const url = buildUploadUrl(kind);
-
       const form = new FormData();
       form.append("file", file);
 
@@ -288,7 +285,11 @@ export default function UploadPage() {
         throw new Error(pickMsg(data));
       }
 
-      setOk(`${TITLES[kind]} uploaded: ${file.name}${needsAsOf(kind) ? ` (as_of ${asOf[kind]})` : ""}`);
+      setOk(
+        `${TITLES[kind]} uploaded: ${file.name}${
+          needsAsOf(kind) ? ` (as_of ${asOf[kind]})` : ""
+        }`
+      );
       setSelected((prev) => ({ ...prev, [kind]: {} }));
       await refreshStatus();
     } catch (e: any) {
@@ -300,6 +301,52 @@ export default function UploadPage() {
       setBusy(null);
       const input = fileInputs[kind].current;
       if (input) input.value = "";
+    }
+  }
+
+  async function sendNewsletter(mode: "test" | "list") {
+    setErr(null);
+    setOk(null);
+    setBusy("newsletter");
+
+    try {
+      const subject = nlSubject.trim();
+      const body = nlBody.trim();
+
+      if (!subject) throw new Error("Newsletter subject is required.");
+      if (!body) throw new Error("Newsletter message is required.");
+
+      const payload: any = { subject, body, mode };
+      if (mode === "test") {
+        const to = nlTestEmail.trim();
+        if (!to) throw new Error("Enter a test email first.");
+        payload.test_email = to;
+      }
+
+      const resp = await apiPost<NewsletterSendResp>("/api/admin/newsletter/send", payload);
+
+      if (resp && typeof resp === "object" && (resp as any).ok === false) {
+        throw new Error(pickMsg(resp));
+      }
+
+      const sent = (resp as any)?.sent;
+      const skipped = (resp as any)?.skipped;
+
+      setNlLastSent(new Date().toISOString());
+      setOk(
+        mode === "test"
+          ? "Test email sent."
+          : `Newsletter sent.${typeof sent === "number" ? ` Sent: ${sent}.` : ""}${
+              typeof skipped === "number" ? ` Skipped: ${skipped}.` : ""
+            }`
+      );
+    } catch (e: any) {
+      const msg =
+        (e?.data && typeof e.data === "object" ? pickMsg(e.data) : null) ||
+        (e instanceof Error ? e.message : "Newsletter send failed.");
+      setErr(msg);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -335,13 +382,19 @@ export default function UploadPage() {
             <div>
               <h1 className={styles.h1}>Admin Upload Center</h1>
               <p className={styles.sub}>
-                Upload the right file to the right section. <span className={styles.mono}>Positions</span> = current
-                holdings. <span className={styles.mono}>Performance</span> = balance history over time.
+                Upload the right file to the right section.{" "}
+                <span className={styles.mono}>Positions</span> = current holdings.{" "}
+                <span className={styles.mono}>Performance</span> = balance history over time.
               </p>
             </div>
 
             <div className={styles.topRight}>
-              <button className={styles.refreshBtn} type="button" onClick={refreshStatus} disabled={!!busy}>
+              <button
+                className={styles.refreshBtn}
+                type="button"
+                onClick={refreshStatus}
+                disabled={!!busy}
+              >
                 Refresh status
               </button>
               <a className={styles.backBtn} href="/portfolio">
@@ -352,7 +405,7 @@ export default function UploadPage() {
 
           {(err || ok) && (
             <div className={err ? styles.alertErr : styles.alertOk}>
-              <div className={styles.alertTitle}>{err ? "Upload failed" : "Success"}</div>
+              <div className={styles.alertTitle}>{err ? "Action failed" : "Success"}</div>
               <div className={styles.alertMsg}>{err ?? ok}</div>
             </div>
           )}
@@ -370,7 +423,12 @@ export default function UploadPage() {
                     <div className={styles.cardTitle}>{TITLES[k]}</div>
 
                     <div className={styles.cardActions}>
-                      <button type="button" className={styles.pickBtn} onClick={() => onPickClick(k)} disabled={!!busy}>
+                      <button
+                        type="button"
+                        className={styles.pickBtn}
+                        onClick={() => onPickClick(k)}
+                        disabled={!!busy}
+                      >
                         Choose file
                       </button>
 
@@ -397,7 +455,10 @@ export default function UploadPage() {
                   {needsAsOf(k) && (
                     <div className={styles.section}>
                       <div className={styles.sectionLabel}>As-of date (required)</div>
-                      <div className={styles.sectionValue} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <div
+                        className={styles.sectionValue}
+                        style={{ display: "flex", gap: 12, alignItems: "center" }}
+                      >
                         <input
                           type="date"
                           value={asOf[k]}
@@ -453,7 +514,9 @@ export default function UploadPage() {
                           {lastFile ? (
                             <>
                               <span className={styles.sep}>•</span>
-                              <span className={styles.mono}>{prettyFileName(lastFile)}</span>
+                              <span className={styles.mono}>
+                                {prettyFileName(lastFile)}
+                              </span>
                             </>
                           ) : null}
                         </>
@@ -487,6 +550,135 @@ export default function UploadPage() {
                 </section>
               );
             })}
+
+            <section className={styles.card} aria-label="Newsletter">
+              <div className={styles.cardHeader}>
+                <div className={styles.cardTitle}>Newsletter</div>
+
+                <div className={styles.cardActions}>
+                  <button
+                    type="button"
+                    className={styles.pickBtn}
+                    onClick={() => sendNewsletter("test")}
+                    disabled={!!busy}
+                    title="Sends only to the test email address"
+                  >
+                    Send test
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.uploadBtn}
+                    onClick={() => sendNewsletter("list")}
+                    disabled={!!busy}
+                    title="Sends to the whole subscriber list"
+                  >
+                    {busy === "newsletter" ? "Sending…" : "Send to list"}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.cardPurpose}>
+                Send an email blast to your subscriber list (admin-only). Uses a backend email provider.
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionLabel}>Subject</div>
+                <div className={styles.sectionValue} style={{ width: "100%" }}>
+                  <input
+                    value={nlSubject}
+                    onChange={(e) => {
+                      setNlSubject(e.target.value);
+                      setErr(null);
+                      setOk(null);
+                    }}
+                    disabled={!!busy}
+                    placeholder="Weekly update: New positions + performance recap"
+                    style={{
+                      width: "100%",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      background: "rgba(255,255,255,0.03)",
+                      color: "rgba(255,255,255,0.92)",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionLabel}>Message</div>
+                <div className={styles.sectionValue} style={{ width: "100%" }}>
+                  <textarea
+                    value={nlBody}
+                    onChange={(e) => {
+                      setNlBody(e.target.value);
+                      setErr(null);
+                      setOk(null);
+                    }}
+                    disabled={!!busy}
+                    placeholder="Write your newsletter here..."
+                    rows={8}
+                    style={{
+                      width: "100%",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      background: "rgba(255,255,255,0.03)",
+                      color: "rgba(255,255,255,0.92)",
+                      outline: "none",
+                      resize: "vertical",
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionLabel}>Test email (optional)</div>
+                <div
+                  className={styles.sectionValue}
+                  style={{ width: "100%", display: "flex", gap: 10 }}
+                >
+                  <input
+                    value={nlTestEmail}
+                    onChange={(e) => {
+                      setNlTestEmail(e.target.value);
+                      setErr(null);
+                      setOk(null);
+                    }}
+                    disabled={!!busy}
+                    placeholder="you@example.com"
+                    style={{
+                      flex: 1,
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      border: "1px solid rgba(255,255,255,0.16)",
+                      background: "rgba(255,255,255,0.03)",
+                      color: "rgba(255,255,255,0.92)",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+                <div style={{ marginTop: 8 }} className={styles.dim}>
+                  “Send test” sends only to this email. “Send to list” emails all subscribers.
+                </div>
+              </div>
+
+              <div className={styles.section}>
+                <div className={styles.sectionLabel}>Last sent</div>
+                <div className={styles.sectionValue}>
+                  {nlLastSent ? (
+                    <span className={styles.mono}>{nlLastSent}</span>
+                  ) : (
+                    <span className={styles.dim}>—</span>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.note}>
+                Backend: <span className={styles.mono}>POST /api/admin/newsletter/send</span>
+              </div>
+            </section>
           </div>
 
           <div className={styles.note}>

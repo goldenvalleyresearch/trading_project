@@ -38,19 +38,33 @@ function isOkTrue(data: unknown): boolean {
   return !!data && typeof data === "object" && (data as any).ok === true;
 }
 
+async function roleBasedRedirect(fallback = "/portfolio"): Promise<string> {
+  try {
+    const me = await apiGet<any>("/api/auth/me");
+    const role =
+      (typeof me?.role === "string" && me.role) ||
+      (typeof me?.user?.role === "string" && me.user.role) ||
+      "";
+
+    if (role.toLowerCase() === "admin") return "/upload";
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function checkSession(): Promise<LoginResp | { ok: false }> {
   try {
     const data = await apiGet<unknown>("/api/auth/session");
-
     if (!isOkTrue(data)) return { ok: false };
 
     const token = readAccessToken(data);
     if (token) setAccessToken(token);
 
-    return {
-      ok: true,
-      redirect: readRedirect(data) ?? "/portfolio",
-    };
+    const backendRedirect = readRedirect(data) ?? "/portfolio";
+    const redirect = await roleBasedRedirect(backendRedirect);
+
+    return { ok: true, redirect };
   } catch {
     return { ok: false };
   }
@@ -64,21 +78,16 @@ export async function login(args: LoginArgs): Promise<LoginResp> {
       remember: args.remember,
     });
 
-    if (!isOkTrue(data)) {
-      return { ok: false, error: pickLoginMsg(data) };
-    }
+    if (!isOkTrue(data)) return { ok: false, error: pickLoginMsg(data) };
 
     const token = readAccessToken(data);
-    if (token) {
-      setAccessToken(token);
-    } else {
-      return { ok: false, error: "Missing access token from server." };
-    }
+    if (!token) return { ok: false, error: "Missing access token from server." };
+    setAccessToken(token);
 
-    return {
-      ok: true,
-      redirect: readRedirect(data) ?? "/portfolio",
-    };
+    const backendRedirect = readRedirect(data) ?? "/portfolio";
+    const redirect = await roleBasedRedirect(backendRedirect);
+
+    return { ok: true, redirect };
   } catch (e: unknown) {
     const anyErr = e as any;
     const payload = anyErr?.data ?? anyErr?.response ?? null;

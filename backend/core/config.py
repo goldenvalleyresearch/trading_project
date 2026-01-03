@@ -4,11 +4,14 @@ from typing import List, Union, Optional
 
 
 class Settings(BaseSettings):
-
     MONGO_URI: str = Field(default="mongodb://localhost:27017")
     MONGO_DB: str = Field(default="obvioustrades")
 
     POLYGON_API_KEY: Optional[str] = None
+
+
+    BREVO_API_KEY: Optional[str] = None
+    BREVO_FROM_EMAIL: Optional[str] = None
 
     JWT_SECRET: str = Field(default="dev-change-me")
     JWT_ALG: str = Field(default="HS256")
