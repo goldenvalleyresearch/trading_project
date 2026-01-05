@@ -21,7 +21,7 @@ import {
 } from "../../lib/renderStock";
 
 type Props = {
-  symbol: string;
+  symbol: string; // default/start symbol
   defaultRange?: StockRange;
   height?: number;
   className?: string;
@@ -52,12 +52,16 @@ function formatUpdated(s: string | null) {
   });
 }
 
+function cleanSymbol(raw: string) {
+  // allow letters, numbers, dot, dash (BRK.B, RDS-A, etc)
+  return raw.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, "");
+}
+
 export default function StockChart({
   symbol,
   defaultRange = "6M",
   height = 260,
   className,
-  // ✅ your backend route
   endpoint = "/api/benchmark/price-series",
 }: Props) {
   const [range, setRange] = useState<StockRange>(defaultRange);
@@ -66,11 +70,34 @@ export default function StockChart({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // ✅ user-controlled symbol (what we actually fetch)
+  const [activeSymbol, setActiveSymbol] = useState<string>(cleanSymbol(symbol || ""));
+  // ✅ input field value
+  const [symbolInput, setSymbolInput] = useState<string>(cleanSymbol(symbol || ""));
+
+  // keep input + activeSymbol in sync if parent changes the default
+  useEffect(() => {
+    const s = cleanSymbol(symbol || "");
+    setActiveSymbol(s);
+    setSymbolInput(s);
+  }, [symbol]);
+
+  const canSubmit = useMemo(() => {
+    const s = cleanSymbol(symbolInput);
+    return s.length >= 1 && s.length <= 10;
+  }, [symbolInput]);
+
+  const submitSymbol = () => {
+    const next = cleanSymbol(symbolInput);
+    if (!next) return;
+    setActiveSymbol(next);
+  };
+
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      const sym = (symbol || "").trim().toUpperCase();
+      const sym = cleanSymbol(activeSymbol);
       if (!sym) return;
 
       setLoading(true);
@@ -80,7 +107,6 @@ export default function StockChart({
         const backend: any = await fetchStockSeries(sym, range, endpoint);
         if (!alive) return;
 
-        // backend shape expected: { symbol, range, as_of, series:[{date, close}] }
         setUpdated(
           typeof backend?.as_of === "string"
             ? backend.as_of
@@ -104,7 +130,7 @@ export default function StockChart({
     return () => {
       alive = false;
     };
-  }, [symbol, range, endpoint]);
+  }, [activeSymbol, range, endpoint]);
 
   const stats = useMemo(() => {
     if (!series.length) return null;
@@ -115,26 +141,75 @@ export default function StockChart({
     return { first, last, change, pct };
   }, [series]);
 
-  const sym = (symbol || "").trim().toUpperCase();
+  const sym = cleanSymbol(activeSymbol);
 
   return (
     <div className={`${styles.card} ${className ?? ""}`}>
       <div className={styles.topRow}>
         <div className={styles.title}>{sym ? `${sym} price` : "Price chart"}</div>
 
-        <div className={styles.rangeRow} aria-label="Chart range">
-          {(["1M", "3M", "6M", "1Y", "5Y"] as StockRange[]).map((r) => (
+        {/* ✅ ticker changer (no other files) */}
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              value={symbolInput}
+              onChange={(e) => setSymbolInput(cleanSymbol(e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitSymbol();
+              }}
+              placeholder="Ticker (e.g. AAPL)"
+              aria-label="Stock ticker"
+              style={{
+                height: 32,
+                width: 150,
+                padding: "0 10px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: "rgba(0,0,0,0.22)",
+                color: "rgba(255,255,255,0.9)",
+                fontSize: 12,
+                outline: "none",
+              }}
+            />
             <button
-              key={r}
-              className={`${styles.rangeBtn} ${
-                r === range ? styles.rangeBtnActive : ""
-              }`}
-              onClick={() => setRange(r)}
               type="button"
+              onClick={submitSymbol}
+              disabled={!canSubmit}
+              style={{
+                height: 32,
+                padding: "0 10px",
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.12)",
+                background: canSubmit ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.9)",
+                fontSize: 12,
+                cursor: canSubmit ? "pointer" : "not-allowed",
+              }}
             >
-              {r}
+              Go
             </button>
-          ))}
+          </div>
+
+          <div className={styles.rangeRow} aria-label="Chart range">
+            {(["1M", "3M", "6M", "1Y", "5Y"] as StockRange[]).map((r) => (
+              <button
+                key={r}
+                className={`${styles.rangeBtn} ${r === range ? styles.rangeBtnActive : ""}`}
+                onClick={() => setRange(r)}
+                type="button"
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -148,14 +223,11 @@ export default function StockChart({
           <span className={styles.metaK}>Change</span>
           <span className={styles.metaV}>
             {stats
-              ? `${formatMoney(stats.change)} (${
-                  Number.isFinite(stats.pct) ? stats.pct.toFixed(2) : "—"
-                }%)`
+              ? `${formatMoney(stats.change)} (${Number.isFinite(stats.pct) ? stats.pct.toFixed(2) : "—"}%)`
               : "—"}
           </span>
         </div>
 
-        {/* ✅ shows backend cache timestamp */}
         <div className={styles.metaItem}>
           <span className={styles.metaK}>Updated</span>
           <span className={styles.metaV}>{formatUpdated(updated)}</span>

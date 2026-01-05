@@ -1,4 +1,6 @@
 import styles from "./page.module.css";
+import { LINKS } from "../../lib/site";
+
 
 export default function Footer() {
   return (
@@ -12,11 +14,12 @@ export default function Footer() {
         </div>
 
         <div className={styles.links}>
-          <a href="/portfolio">Portfolio</a>
-          <a href="/performance">Performance</a>
-          <a href="/login">Login</a>
-          <a href="/transparency">Transparency</a>
-        </div>
+        {LINKS.map((link) => (
+          <a key={link.href} href={link.href}>
+            {link.label}
+          </a>
+        ))}
+      </div>
 
         <div className={styles.meta}>
           <span>Data timestamped</span>

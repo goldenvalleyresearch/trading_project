@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 import Header from "../../componets/Header_bar/Header_bar";
 import EquityPreview from "../../componets/EquityPreview/EquityPreview";
@@ -81,23 +81,6 @@ function computeSharpe(points: EquityPoint[]): number | null {
   return (mean / sd) * Math.sqrt(252);
 }
 
-function rangeToWindow(range: RangeKey) {
-  if (range === "1M") return 30;
-  if (range === "3M") return 90;
-  if (range === "1Y") return 365;
-  return 10000;
-}
-
-function normalizeEquitySeries(input: any): EquityPoint[] {
-  const arr: any[] = Array.isArray(input?.series) ? input.series : [];
-  return arr
-    .map((p) => ({
-      d: String(p?.date ?? "").slice(0, 10),
-      v: Number(p?.balance),
-    }))
-    .filter((p) => p.d.length === 10 && Number.isFinite(p.v));
-}
-
 function normalizeCloseSeries(input: any): EquityPoint[] {
   const arr: any[] = Array.isArray(input?.series) ? input.series : [];
   return arr
@@ -127,30 +110,34 @@ function computeVsSPY(port: EquityPoint[], spy: EquityPoint[]): number | null {
 export default function PerformancePage() {
   const [range, setRange] = useState<RangeKey>("1Y");
 
-  const [rawPoints, setRawPoints] = useState<EquityPoint[]>([]);
-  const [apiUpdated, setApiUpdated] = useState<string>("—");
+  // points used for KPIs (fed from chart)
+  const [points, setPoints] = useState<EquityPoint[]>([]);
+  const [updatedOn, setUpdatedOn] = useState<string>("—");
 
   const [spyPoints, setSpyPoints] = useState<EquityPoint[]>([]);
   const [spyErr, setSpyErr] = useState<string | null>(null);
 
-  useEffect(() => {
-    const window = rangeToWindow(range);
+  // ✅ prevent infinite loop: only update state when (len,lastDate) changes
+  const lastKeyRef = useRef<string>("");
 
-    (async () => {
-      try {
-        const j: any = await apiGet(`/api/portfolio/equity-curve?window=${window}`);
-        const updated = String(j?.as_of ?? "").slice(0, 10);
-        setApiUpdated(updated || "—");
+  const handleChartData = useCallback((pts: any[]) => {
+    const cleaned: EquityPoint[] = Array.isArray(pts)
+      ? pts
+          .map((p) => ({ d: String(p?.d ?? "").slice(0, 10), v: Number(p?.v) }))
+          .filter((p) => p.d.length === 10 && Number.isFinite(p.v))
+      : [];
 
-        const pts = normalizeEquitySeries(j);
-        setRawPoints(pts);
-      } catch {
-        setApiUpdated("—");
-        setRawPoints([]);
-      }
-    })();
-  }, [range]);
+    const lastD = cleaned.length ? cleaned[cleaned.length - 1].d : "—";
+    const key = `${cleaned.length}:${lastD}`;
 
+    if (lastKeyRef.current === key) return;
+    lastKeyRef.current = key;
+
+    setPoints(cleaned);
+    setUpdatedOn(lastD);
+  }, []);
+
+  // Benchmark (still fetched here for KPI delta)
   useEffect(() => {
     const maxAgeSec = 3600;
     (async () => {
@@ -167,17 +154,14 @@ export default function PerformancePage() {
     })();
   }, [range]);
 
-  const updatedOn =
-    apiUpdated !== "—" ? apiUpdated : rawPoints.length ? rawPoints[rawPoints.length - 1].d : "—";
-
-  const cagr = useMemo(() => computeCAGR(rawPoints), [rawPoints]);
-  const maxDD = useMemo(() => computeMaxDrawdown(rawPoints), [rawPoints]);
-  const sharpe = useMemo(() => computeSharpe(rawPoints), [rawPoints]);
+  const cagr = useMemo(() => computeCAGR(points), [points]);
+  const maxDD = useMemo(() => computeMaxDrawdown(points), [points]);
+  const sharpe = useMemo(() => computeSharpe(points), [points]);
 
   const vsSPY = useMemo(() => {
     if (spyErr) return null;
-    return computeVsSPY(rawPoints, spyPoints);
-  }, [rawPoints, spyPoints, spyErr]);
+    return computeVsSPY(points, spyPoints);
+  }, [points, spyPoints, spyErr]);
 
   return (
     <div className={styles.page}>
@@ -254,6 +238,7 @@ export default function PerformancePage() {
               rebaseTo100={true}
               showSpy={true}
               spySymbol="SPY"
+              onData={handleChartData}
             />
           </div>
 

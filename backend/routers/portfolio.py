@@ -70,6 +70,8 @@ class EquityPoint(BaseModel):
 class EquityCurveResp(BaseModel):
     series: List[EquityPoint]
     count: int
+    as_of: str
+    mode: str
 
 
 def utcnow() -> datetime:
@@ -480,63 +482,120 @@ async def legacy_portfolio_summary(
 @router.get("/api/portfolio/equity-curve", response_model=EquityCurveResp)
 async def legacy_equity_curve(
     window: int = Query(365, ge=1, le=20000),
+    mode: str = Query("equity", pattern="^(equity|twr)$"),
     refresh_max_age_sec: int = Query(REFRESH_EVERY_SEC, ge=30, le=86400),
 ):
     db = get_db()
 
     perf = db["performance_daily"]
-    cur = perf.find({}, {"_id": 0, "date": 1, "balance": 1}).sort("date", -1).limit(window)
+    cur = perf.find(
+        {},
+        {"_id": 0, "date": 1, "balance": 1, "net_flow": 1},
+    ).sort("date", -1).limit(window)
+
     rows = await cur.to_list(length=window)
     rows = list(reversed(rows))
 
-    series: list[dict] = []
+    daily: list[dict] = []
     for r in rows:
         d = str(r.get("date", ""))[:10]
-        b = r.get("balance")
-        if len(d) == 10 and isinstance(b, (int, float)):
-            series.append({"date": d, "balance": float(b)})
+        bal = r.get("balance")
+        nf = r.get("net_flow", 0.0)
+        if len(d) == 10 and isinstance(bal, (int, float)):
+            daily.append(
+                {
+                    "date": d,
+                    "balance": float(bal),
+                    "net_flow": float(nf) if isinstance(nf, (int, float)) else 0.0,
+                }
+            )
 
-    try:
-        await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
-    except Exception:
-        pass
+    # -------------------------
+    # MODE 1: equity (raw balance)
+    # -------------------------
+    if mode == "equity":
+        try:
+            await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
+        except Exception:
+            pass
 
-    doc = await _latest_snapshot_doc()
-    prices = await _prices_map()
+        doc = await _latest_snapshot_doc()
+        prices = await _prices_map()
 
-    cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
-    pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
+        cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
+        pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
 
-    live_non_cash = 0.0
-    for p in _positions_list(doc):
-        if not isinstance(p, dict):
-            continue
-        t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-        if not t or _is_cash_like_ticker(t):
-            continue
+        live_non_cash = 0.0
+        for p in _positions_list(doc):
+            if not isinstance(p, dict):
+                continue
+            t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
+            if not t or _is_cash_like_ticker(t):
+                continue
 
-        q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
+            q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
+            live = prices.get(t)
+            px = (
+                _coerce_float(live.get("price"), 0.0)
+                if live is not None
+                else _coerce_float(p.get("last_price") or p.get("price") or 0.0, 0.0)
+            )
+            live_non_cash += q * px
 
-        live = prices.get(t)
-        if live is not None:
-            px = _coerce_float(live.get("price"), 0.0)
+        live_total = float(live_non_cash + cash_spaxx + pending_amount)
+
+        live_date = utcnow().date().isoformat()
+        if daily and daily[-1]["date"] == live_date:
+            daily[-1]["balance"] = live_total
+            daily[-1]["net_flow"] = float(daily[-1].get("net_flow") or 0.0)
         else:
-            px = _coerce_float(p.get("last_price") or p.get("price") or 0.0, 0.0)
+            daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
 
-        live_non_cash += q * px
+        if len(daily) > window:
+            daily = daily[-window:]
 
-    live_total = float(live_non_cash + cash_spaxx + pending_amount)
+        series = [{"date": r["date"], "balance": float(r["balance"])} for r in daily]
+        as_of = series[-1]["date"] if series else "—"
+        return {"series": series, "count": len(series), "as_of": as_of, "mode": mode}
 
-    live_date = utcnow().date().isoformat()
-    if series and series[-1]["date"] == live_date:
-        series[-1]["balance"] = live_total
-    else:
-        series.append({"date": live_date, "balance": live_total})
+    # -------------------------
+    # MODE 2: twr (performance only)
+    # Requires daily[i].net_flow to be correct!
+    # -------------------------
+    if len(daily) < 1:
+        return {"series": [], "count": 0, "as_of": "—", "mode": mode}
 
-    if len(series) > window:
-        series = series[-window:]
+    if len(daily) == 1:
+        return {
+            "series": [{"date": daily[0]["date"], "balance": 100.0}],
+            "count": 1,
+            "as_of": daily[0]["date"],
+            "mode": mode,
+        }
 
-    return {"series": series, "count": len(series)}
+    idx = 100.0
+    out = [{"date": daily[0]["date"], "balance": idx}]
+
+    prev = float(daily[0]["balance"])
+    if prev <= 0:
+        for r in daily[1:]:
+            out.append({"date": r["date"], "balance": idx})
+        return {"series": out, "count": len(out), "as_of": out[-1]["date"], "mode": mode}
+
+    for r in daily[1:]:
+        cur_bal = float(r["balance"])
+        flow = float(r.get("net_flow") or 0.0)
+
+        # TWR daily return excluding contributions
+        ret = (cur_bal - flow - prev) / prev if prev else 0.0
+        if ret < -0.99:
+            ret = -0.99
+
+        idx *= (1.0 + ret)
+        out.append({"date": r["date"], "balance": float(round(idx, 4))})
+        prev = cur_bal
+
+    return {"series": out, "count": len(out), "as_of": out[-1]["date"], "mode": mode}
 
 
 @router.get("/api/benchmark/price-series")

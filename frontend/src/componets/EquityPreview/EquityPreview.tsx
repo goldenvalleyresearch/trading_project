@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   ResponsiveContainer,
@@ -22,7 +22,7 @@ type Props = {
   range?: RangeKey;
   onRangeChange?: (r: RangeKey) => void;
 
-  // ✅ add this
+  // sends back the SAME portfolio series used in the chart (so KPIs match)
   onData?: (points: Point[]) => void;
 
   showSpy?: boolean;
@@ -51,10 +51,13 @@ function rangeToWindow(range: RangeKey) {
 function normalizeEquity(input: unknown): Point[] {
   const root = input as any;
   const arr: any[] =
-    Array.isArray(root) ? root :
-    Array.isArray(root?.series) ? root.series :
-    Array.isArray(root?.data) ? root.data :
-    [];
+    Array.isArray(root)
+      ? root
+      : Array.isArray(root?.series)
+      ? root.series
+      : Array.isArray(root?.data)
+      ? root.data
+      : [];
 
   return arr
     .map((p) => ({
@@ -67,10 +70,13 @@ function normalizeEquity(input: unknown): Point[] {
 function normalizeSeriesClose(input: unknown): Point[] {
   const root = input as any;
   const arr: any[] =
-    Array.isArray(root) ? root :
-    Array.isArray(root?.series) ? root.series :
-    Array.isArray(root?.data) ? root.data :
-    [];
+    Array.isArray(root)
+      ? root
+      : Array.isArray(root?.series)
+      ? root.series
+      : Array.isArray(root?.data)
+      ? root.data
+      : [];
 
   return arr
     .map((p) => ({
@@ -81,7 +87,9 @@ function normalizeSeriesClose(input: unknown): Point[] {
 }
 
 function sortByDate(points: Point[]) {
-  return [...points].sort((a, b) => parseISO(a.d).getTime() - parseISO(b.d).getTime());
+  return [...points].sort(
+    (a, b) => parseISO(a.d).getTime() - parseISO(b.d).getTime()
+  );
 }
 
 function fillDaily(points: Point[]): Point[] {
@@ -98,7 +106,9 @@ function fillDaily(points: Point[]): Point[] {
 
     const curDt = parseISO(cur.d);
     const nextDt = parseISO(next.d);
-    const gap = Math.round((nextDt.getTime() - curDt.getTime()) / 86400000);
+    const gap = Math.round(
+      (nextDt.getTime() - curDt.getTime()) / 86400000
+    );
 
     if (gap <= 1) continue;
 
@@ -128,12 +138,18 @@ function makeTickFormatter(range: RangeKey) {
 
 function tooltipLabel(label: string) {
   const dt = parseISO(label);
-  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+  return dt.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
 }
 
 function rebaseBothTo100(rows: ChartRow[]) {
   // choose first date where BOTH exist (so comparison is fair)
-  const baseRow = rows.find((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
+  const baseRow = rows.find(
+    (r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN)
+  );
   if (!baseRow) return rows;
 
   const p0 = baseRow.p as number;
@@ -148,11 +164,11 @@ function rebaseBothTo100(rows: ChartRow[]) {
 }
 
 const fmtUSD = (n: number) =>
-  Number.isFinite(n) ? n.toLocaleString(undefined, { style: "currency", currency: "USD" }) : "—";
+  Number.isFinite(n)
+    ? n.toLocaleString(undefined, { style: "currency", currency: "USD" })
+    : "—";
 
-const fmt100 = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : "—");
-
-// ✅ NEW: show percent change from the rebased 100
+// show percent change from rebased 100
 const fmtPctFrom100 = (n: number) =>
   Number.isFinite(n) ? `${(n - 100).toFixed(2)}%` : "—";
 
@@ -161,7 +177,7 @@ export default function EquityPreview({
   showControls = false,
   range: rangeProp,
   onRangeChange,
-  onData, // ✅ add this
+  onData,
   showSpy = true,
   spySymbol = "SPY",
   rebaseTo100 = true,
@@ -181,7 +197,10 @@ export default function EquityPreview({
   const [err, setErr] = useState<string | null>(null);
   const [benchErr, setBenchErr] = useState<string | null>(null);
 
-  // equity
+  // ✅ prevent onData spam / loops
+  const lastSentRef = useRef<string>("");
+
+  // equity (TWR mode = performance only, excludes contributions)
   useEffect(() => {
     const controller = new AbortController();
     const window = rangeToWindow(range);
@@ -190,7 +209,9 @@ export default function EquityPreview({
       try {
         setLoading(true);
         setErr(null);
-        const json = await apiGet<unknown>(`/api/portfolio/equity-curve?window=${window}`);
+        const json = await apiGet<unknown>(
+          `/api/portfolio/equity-curve?window=${window}&mode=twr`
+        );
         setEquityRemote(json);
       } catch (e: any) {
         if (controller.signal.aborted) return;
@@ -204,9 +225,17 @@ export default function EquityPreview({
     return () => controller.abort();
   }, [range]);
 
+  // send portfolio series up (same source of truth as the chart)
   useEffect(() => {
     if (!onData) return;
+
     const equityPts = fillDaily(sortByDate(normalizeEquity(equityRemote)));
+    const lastD = equityPts.length ? equityPts[equityPts.length - 1].d : "";
+    const key = `${equityPts.length}:${lastD}`;
+
+    if (lastSentRef.current === key) return;
+    lastSentRef.current = key;
+
     onData(equityPts);
   }, [equityRemote, onData]);
 
@@ -225,7 +254,9 @@ export default function EquityPreview({
         setBenchErr(null);
         const sym = (spySymbol || "SPY").trim().toUpperCase();
         const json = await apiGet<unknown>(
-          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(
+            sym
+          )}&range=${encodeURIComponent(range)}`
         );
         setBenchRemote(json);
       } catch (e: any) {
@@ -244,13 +275,12 @@ export default function EquityPreview({
 
     if (equityPts.length === 0) return [];
 
-    // map by date
     const pMap = new Map(equityPts.map((p) => [p.d, p.v]));
     const bMap = new Map(benchPts.map((p) => [p.d, p.v]));
 
-    // union of dates (sorted)
-    const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()]))
-      .sort((a, b) => parseISO(a).getTime() - parseISO(b).getTime());
+    const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
+      (a, b) => parseISO(a).getTime() - parseISO(b).getTime()
+    );
 
     const merged: ChartRow[] = dates.map((d) => ({
       d,
@@ -265,32 +295,50 @@ export default function EquityPreview({
   const tickFormatter = useMemo(() => makeTickFormatter(range), [range]);
   const xInterval = range === "1M" ? 4 : range === "3M" ? 12 : "preserveStartEnd";
 
-  // ✅ CHANGED: if rebased, show % (relative to 100)
   const tooltipFmt = rebaseTo100 && showSpy ? fmtPctFrom100 : fmtUSD;
 
   if (loading && chartData.length === 0) {
-    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Loading…</div>;
+    return (
+      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
+        Loading…
+      </div>
+    );
   }
   if (err && chartData.length === 0) {
-    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Failed: {err}</div>;
+    return (
+      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
+        Failed: {err}
+      </div>
+    );
   }
   if (chartData.length === 0) {
-    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>No equity data.</div>;
+    return (
+      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
+        No equity data.
+      </div>
+    );
   }
 
   return (
     <div>
       {showControls && (
-        <div surrounded-by="nothing" style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          <button type="button" onClick={() => setRange("1M")} style={btn(range === "1M")}>1M</button>
-          <button type="button" onClick={() => setRange("3M")} style={btn(range === "3M")}>3M</button>
-          <button type="button" onClick={() => setRange("1Y")} style={btn(range === "1Y")}>1Y</button>
-          <button type="button" onClick={() => setRange("ALL")} style={btn(range === "ALL")}>All</button>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
+          <button type="button" onClick={() => setRange("1M")} style={btn(range === "1M")}>
+            1M
+          </button>
+          <button type="button" onClick={() => setRange("3M")} style={btn(range === "3M")}>
+            3M
+          </button>
+          <button type="button" onClick={() => setRange("1Y")} style={btn(range === "1Y")}>
+            1Y
+          </button>
+          <button type="button" onClick={() => setRange("ALL")} style={btn(range === "ALL")}>
+            All
+          </button>
 
           {showSpy && (
             <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
-              {/* ✅ CHANGED: label as S&P 500 (even if the symbol is SPY behind the scenes) */}
-              {benchErr ? `Benchmark: S&P 500 (off)` : `Benchmark: S&P 500`}
+              {benchErr ? "Benchmark: S&P 500 (off)" : "Benchmark: S&P 500"}
             </div>
           )}
         </div>
@@ -314,7 +362,6 @@ export default function EquityPreview({
             labelFormatter={(label) => tooltipLabel(String(label))}
             formatter={(value, name) => {
               const n = Number(value);
-              // ✅ CHANGED: label S&P 500 (not SPY)
               const label = name === "p" ? "Portfolio" : "S&P 500";
               return [tooltipFmt(n), label];
             }}
@@ -327,7 +374,6 @@ export default function EquityPreview({
             labelStyle={{ color: "rgba(255,255,255,0.65)" }}
           />
 
-          {/* Portfolio */}
           <Line
             type="monotone"
             dataKey="p"
@@ -338,7 +384,6 @@ export default function EquityPreview({
             connectNulls
           />
 
-          {/* Benchmark */}
           {showSpy && !benchErr && (
             <Line
               type="monotone"
