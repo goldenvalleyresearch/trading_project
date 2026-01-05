@@ -17,15 +17,9 @@ import {
   hasAnyFactorGrades,
   avg,
   topN,
-  fmtMaybe,
-  fmtMoney,
   fmtNum,
-  fmtPct,
-  fmtPe,
-  fmtShortMoneyFromStringish,
   cleanText,
   gradeChip,
-  safeId,
   type Tone,
 } from "../../lib/research";
 
@@ -63,7 +57,9 @@ function FactorRow({ r }: { r: ResearchRow }) {
   return (
     <div className={styles.factorRow}>
       <Chip
-        label={`WS ${r.wall_street_ratings !== null ? fmtNum(r.wall_street_ratings, 2) : "—"}`}
+        label={`WS ${
+          r.wall_street_ratings !== null ? fmtNum(r.wall_street_ratings, 2) : "—"
+        }`}
         tone={r.wall_street_ratings !== null ? "mid" : "muted"}
       />
       {items.map((it) => {
@@ -135,27 +131,25 @@ export default function ResearchClient() {
 
   const shown = useMemo(() => shownAll.slice(0, limit), [shownAll, limit]);
 
-  const fundamentalsRows = useMemo(() => sorted.filter((r) => r.report_type === "fundamentals"), [sorted]);
-  const factorsRows = useMemo(() => sorted.filter((r) => r.report_type === "factors"), [sorted]);
-  const mergedRows = useMemo(() => sorted.filter((r) => r.report_type === "merged"), [sorted]);
-
+  // (these are currently unused in the UI, but harmless to keep)
   const total = sorted.length;
   const avgQuant = useMemo(() => avg(shownAll.map((r) => r.quant_rating)), [shownAll]);
   const avgWS = useMemo(() => avg(shownAll.map((r) => r.wall_street_ratings)), [shownAll]);
+  const topPicks = useMemo(() => topN(shownAll, 10), [shownAll]);
 
   const { bestMove, worstMove } = useMemo(() => {
     let best: ResearchRow | null = null;
     let worst: ResearchRow | null = null;
+
     for (const r of shownAll) {
       const chg = r.change_pct;
       if (!isFiniteNum(chg)) continue;
       if (!best || (best.change_pct ?? -999) < chg) best = r;
       if (!worst || (worst.change_pct ?? 999) > chg) worst = r;
     }
+
     return { bestMove: best, worstMove: worst };
   }, [shownAll]);
-
-  const topPicks = useMemo(() => topN(shownAll, 10), [shownAll]);
 
   function linkWith(params: Record<string, string | null>) {
     const url = new URLSearchParams(sp.toString());
@@ -172,7 +166,8 @@ export default function ResearchClient() {
 
   return (
     <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={[...LINKS]} ctaLabel="View Live" ctaHref="/portfolio" />
+      {/* ✅ FIX: removed ctaLabel/ctaHref because Header type doesn't support it yet */}
+      <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
         <section className={styles.top}>
@@ -203,8 +198,7 @@ export default function ResearchClient() {
           </div>
         </section>
 
-        {/* If rows are empty show a clear empty state */}
-        {(!loading && !errorMsg && sorted.length === 0) ? (
+        {!loading && !errorMsg && sorted.length === 0 ? (
           <div className={styles.emptyBox}>
             <div className={styles.emptyTitle}>No research rows</div>
             <div className={styles.emptySub}>
@@ -212,9 +206,6 @@ export default function ResearchClient() {
             </div>
           </div>
         ) : null}
-
-        {/* If you already have your big UI, paste it here.
-            Right now you at least see header + status + empty/error state. */}
 
         <section className={styles.grid3}>
           <FeatureCard title="Portfolio" body="Compare research vs holdings." href="/portfolio" linkLabel="Open" />
