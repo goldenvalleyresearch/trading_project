@@ -560,7 +560,56 @@ async def legacy_equity_curve(
 
     # -------------------------
     # MODE 2: twr (performance only)
-    # Requires daily[i].net_flow to be correct!
+    # ✅ NEW: append an intraday "live" point from Polygon (no contributions counted)
+    # -------------------------
+    if mode == "twr":
+        try:
+            await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
+        except Exception:
+            pass
+
+        try:
+            doc = await _latest_snapshot_doc()
+            prices = await _prices_map()
+
+            cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
+            pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
+
+            live_non_cash = 0.0
+            for p in _positions_list(doc):
+                if not isinstance(p, dict):
+                    continue
+                t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
+                if not t or _is_cash_like_ticker(t):
+                    continue
+
+                q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
+                live = prices.get(t)
+                px = (
+                    _coerce_float(live.get("price"), 0.0)
+                    if live is not None
+                    else _coerce_float(p.get("last_price") or p.get("price") or 0.0, 0.0)
+                )
+                live_non_cash += q * px
+
+            live_total = float(live_non_cash + cash_spaxx + pending_amount)
+            live_date = utcnow().date().isoformat()
+
+            if daily and daily[-1]["date"] == live_date:
+                daily[-1]["balance"] = live_total
+                # IMPORTANT: make "live" update not count as a deposit/withdrawal
+                daily[-1]["net_flow"] = 0.0
+            else:
+                daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
+
+            if len(daily) > window:
+                daily = daily[-window:]
+        except Exception:
+            # don't break TWR if Polygon/mongo fails
+            pass
+
+    # -------------------------
+    # TWR math (unchanged)
     # -------------------------
     if len(daily) < 1:
         return {"series": [], "count": 0, "as_of": "—", "mode": mode}
@@ -596,7 +645,6 @@ async def legacy_equity_curve(
         prev = cur_bal
 
     return {"series": out, "count": len(out), "as_of": out[-1]["date"], "mode": mode}
-
 
 @router.get("/api/benchmark/price-series")
 async def benchmark_price_series(
