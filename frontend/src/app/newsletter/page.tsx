@@ -3,9 +3,9 @@
 import { useState } from "react";
 import styles from "./page.module.css";
 
-import Header from "../../componets/Header_bar/Header_bar";
-import FeatureCard from "../../componets/FeatureCard/FeatureCard";
-import Footer from "../../componets/Footer/Footer";
+import Header from "@/componets/UI/Header_bar/Header_bar";
+import FeatureCard from "@/componets/UI/FeatureCard/FeatureCard";
+import Footer from "@/componets/UI/Footer/Footer";
 
 import { BRAND_NAME, LINKS } from "../../lib/site";
 import { isValidEmail, subscribeNewsletter } from "../../lib/newsletter";

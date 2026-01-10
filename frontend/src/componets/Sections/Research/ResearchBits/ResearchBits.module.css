@@ -1,0 +1,60 @@
+.miniStat{
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.18);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+.miniK{ font-size: 11px; opacity: 0.6; }
+.miniV{
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+}
+
+.chip{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 12px;
+  line-height: 16px;
+}
+.chipGood{ background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.35); }
+.chipMid{ background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.35); }
+.chipBad{ background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.35); }
+.chipMuted{ background: rgba(148,163,184,0.10); border-color: rgba(148,163,184,0.25); }
+
+.factorRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.moversGrid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.moverCard{
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,0.25);
+  background: rgba(2,6,23,0.25);
+}
+.moverK{ font-size: 12px; opacity: 0.75; }
+.moverV{ margin-top: 4px; font-weight: 900; }
+.moverSub{ margin-top: 2px; font-size: 12px; opacity: 0.75; }
+
+.anchorLink{
+  text-decoration: none;
+  color: inherit;
+}
+@media (max-width: 520px){
+  .moversGrid{ grid-template-columns: 1fr; }
+}

@@ -1,5 +1,5 @@
 // src/lib/site.ts
-export const BRAND_NAME = "The Obvious Trades";
+export const BRAND_NAME = "Golden Valley Market Research";
 
 export const LINKS = [
   { label: "Home", href: "/" },
@@ -8,9 +8,6 @@ export const LINKS = [
 
 
   { label: "Performance", href: "/performance" },
-
-
-  { label: "Research", href: "/research" },
 
   { label: "Newsletter", href: "/newsletter" },
 

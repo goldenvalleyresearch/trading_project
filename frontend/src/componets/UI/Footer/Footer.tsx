@@ -1,5 +1,5 @@
 import styles from "./page.module.css";
-import { LINKS } from "../../lib/site";
+import { LINKS } from "@/lib/site";
 
 
 export default function Footer() {

@@ -4,11 +4,11 @@
 import React, { useMemo, useState } from "react";
 import styles from "./page.module.css";
 
-import Header from "../../componets/Header_bar/Header_bar";
-import Footer from "../../componets/Footer/Footer";
-import { BRAND_NAME, LINKS } from "../../lib/site";
+import Header from "@/componets/UI/Header_bar/Header_bar";
+import Footer from "@/componets/UI/Footer/Footer";
+import { BRAND_NAME, LINKS } from "@/lib/site";
 
-import { registerUser } from "../../lib/register";
+import { registerUser } from "@/lib/register";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");

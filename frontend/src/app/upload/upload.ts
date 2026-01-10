@@ -1,5 +1,5 @@
 // src/lib/upload.ts
-import { apiGet, apiPostForm, ApiError } from "./api";
+import { apiGet, apiPostForm, ApiError } from "../../lib/api";
 
 
 export type UploadKey = "positions" | "performance" | "fundamentals" | "factors";

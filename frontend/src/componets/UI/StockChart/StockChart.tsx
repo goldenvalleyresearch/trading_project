@@ -18,7 +18,7 @@ import {
   toStockChartPoints,
   type StockRange,
   type StockChartPoint,
-} from "../../lib/renderStock";
+} from "./renderStock";
 
 type Props = {
   symbol: string; // default/start symbol

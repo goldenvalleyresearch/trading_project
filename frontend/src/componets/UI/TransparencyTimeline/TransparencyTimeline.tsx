@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import styles from "./page.module.css";
-import type { TimelineEvent } from "../../lib/transparency";
+import type { TimelineEvent } from "../../../lib/transparency";
 
 type Group = { date: string; items: TimelineEvent[] };
 

@@ -1,0 +1,27 @@
+.alertErr,
+.alertOk {
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 10px 0 14px;
+}
+
+.alertErr {
+  border: 1px solid rgba(255, 80, 80, 0.45);
+  background: rgba(255, 80, 80, 0.14);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.alertOk {
+  border: 1px solid rgba(80, 255, 140, 0.35);
+  background: rgba(80, 255, 140, 0.12);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.alertTitle {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.alertMsg {
+  opacity: 0.92;
+}

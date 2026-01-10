@@ -1,0 +1,248 @@
+.card {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.94);
+
+  background:
+    radial-gradient(1200px 220px at 20% 0%, rgba(255, 255, 255, 0.07), transparent 60%),
+    radial-gradient(700px 240px at 95% 10%, rgba(170, 120, 255, 0.10), transparent 55%),
+    rgba(0, 0, 0, 0.30);
+
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.24);
+  background:
+    radial-gradient(1200px 220px at 20% 0%, rgba(255, 255, 255, 0.095), transparent 60%),
+    radial-gradient(700px 240px at 95% 10%, rgba(170, 120, 255, 0.14), transparent 55%),
+    rgba(0, 0, 0, 0.36);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.titleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: -0.01em;
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.cardPurpose {
+  margin-top: 10px;
+  opacity: 0.9;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pickBtn,
+.uploadBtn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease;
+  white-space: nowrap;
+}
+
+.pickBtn:hover,
+.uploadBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pickBtn:disabled,
+.uploadBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.uploadBtn {
+  border-color: rgba(170, 120, 255, 0.35);
+  background: rgba(170, 120, 255, 0.14);
+}
+
+.uploadBtn:hover {
+  border-color: rgba(170, 120, 255, 0.62);
+  background: rgba(170, 120, 255, 0.18);
+}
+
+.form {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.field {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.82;
+  margin-bottom: 6px;
+}
+
+.optional {
+  font-size: 11px;
+  opacity: 0.7;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hint {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.sectionValue {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inlineRow {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+}
+
+.textInput,
+.textArea {
+  width: 100%;
+  border-radius: 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+}
+
+.textArea {
+  resize: vertical;
+  min-height: 150px;
+}
+
+.textInput:disabled,
+.textArea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.textInput:focus,
+.textArea:focus {
+  border-color: rgba(170, 120, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(170, 120, 255, 0.12);
+}
+
+.help {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.metaRow {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.footerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lastSent {
+  display: grid;
+  gap: 6px;
+}
+
+.endpoint {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.dim {
+  opacity: 0.75;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+@media (max-width: 560px) {
+  .cardActions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+}

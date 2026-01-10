@@ -1,5 +1,5 @@
 // src/lib/renderStock.ts
-import { apiGet } from "./api";
+import { apiGet } from "../../../lib/api";
 
 export type StockRange = "1M" | "3M" | "6M" | "1Y" | "5Y";
 

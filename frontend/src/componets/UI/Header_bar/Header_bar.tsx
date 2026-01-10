@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import styles from "./page.module.css";
-import { apiGet, apiPost } from "../../lib/api";
+import Image from "next/image";
+import styles from "./Header_bar.module.css";
+import { apiGet, apiPost } from "@/lib/api";
 
 export type HeaderLink = {
   label: string;
@@ -29,8 +30,10 @@ function clearAccessToken() {
 }
 
 export default function Header({
-  brand = "the obvious trades",
+  brand = "Golden Valley Market Research",
   links,
+  logoSrc = "/gv_test.png",
+  logoAlt = "GV9",
   loginHref = "/login",
   postLogoutHref = "/login",
   meEndpoint = "/api/auth/me",
@@ -38,6 +41,8 @@ export default function Header({
 }: {
   brand?: string;
   links: HeaderLink[];
+  logoSrc?: string;
+  logoAlt?: string;
   loginHref?: string;
   postLogoutHref?: string;
   meEndpoint?: string;
@@ -48,7 +53,6 @@ export default function Header({
   const [open, setOpen] = useState(false);
   const [auth, setAuth] = useState<AuthState>("unknown");
 
-  // ----- mobile menu handlers -----
   useEffect(() => {
     const onResize = () => {
       if (window.innerWidth > 980) setOpen(false);
@@ -64,23 +68,20 @@ export default function Header({
     };
   }, []);
 
-  // ----- auth check (uses api.ts -> includes refresh + retries) -----
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      // show authed immediately if token exists (prevents “Login” flash)
       const tokenPresent = hasAccessToken();
       if (alive) setAuth(tokenPresent ? "authed" : "guest");
-
       if (!tokenPresent) return;
 
       try {
         const data = await apiGet<any>(meEndpoint);
-        const authed = !!data && typeof data === "object" && (data.ok === true || !!data.user);
+        const authed =
+          !!data && typeof data === "object" && (data.ok === true || !!data.user);
         if (alive) setAuth(authed ? "authed" : "guest");
       } catch {
-        // if /me fails, treat as logged out
         clearAccessToken();
         if (alive) setAuth("guest");
       }
@@ -95,7 +96,7 @@ export default function Header({
     try {
       await apiPost<any>(logoutEndpoint, {});
     } finally {
-      clearAccessToken(); // local access token
+      clearAccessToken();
       setAuth("guest");
       setOpen(false);
       router.push(postLogoutHref);
@@ -109,11 +110,20 @@ export default function Header({
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <a className={styles.brand} href="/">
+        <a className={styles.brand} href="/" aria-label={`${brand} home`}>
+          <span className={styles.logoWrap} aria-hidden="true">
+            <Image
+              src={logoSrc}
+              alt={logoAlt}
+              fill
+              priority
+              className={styles.logo}
+            />
+          </span>
           <span className={styles.wordmark}>{brand}</span>
         </a>
 
-        <nav className={styles.nav}>
+        <nav className={styles.nav} aria-label="Primary">
           <div className={styles.links}>
             {links.map((l) => (
               <a key={l.href} className={styles.navLink} href={l.href}>
@@ -166,11 +176,19 @@ export default function Header({
           ))}
 
           {auth === "authed" ? (
-            <button type="button" className={styles.mobileCta} onClick={onLogout}>
+            <button
+              type="button"
+              className={styles.mobileCta}
+              onClick={onLogout}
+            >
               Logout
             </button>
           ) : (
-            <a className={styles.mobileCta} href={loginHref} onClick={() => setOpen(false)}>
+            <a
+              className={styles.mobileCta}
+              href={loginHref}
+              onClick={() => setOpen(false)}
+            >
               Login
             </a>
           )}

@@ -1,17 +1,17 @@
 // src/app/transparency/page.tsx
 import styles from "./page.module.css";
-import Header from "../../componets/Header_bar/Header_bar";
-import SnapshotCard from "../../componets/SnapshotCard/SnapshotCard";
-import TransparencyTimeline from "../../componets/TransparencyTimeline/TransparencyTimeline";
-import Footer from "../../componets/Footer/Footer";
+import Header from "@/componets/UI/Header_bar/Header_bar";
+import TransparencyTimeline from "@/componets/UI/TransparencyTimeline/TransparencyTimeline";
+import Footer from "@/componets/UI/Footer/Footer";
 
-import { BRAND_NAME, LINKS } from "../../lib/site";
+import TransparencyHero from "@/componets/Sections/Transparency/TransparencyHero/TransparencyHero";
 
+import { BRAND_NAME, LINKS } from "@/lib/site";
 import {
   getTransparencyAsOf,
   getTransparencySummaryForUI,
   getTransparencyTimelineForUI,
-} from "../../lib/transparency";
+} from "@/lib/transparency";
 
 const EMPTY_SUMMARY = {
   note: "Could not load summary (API error).",
@@ -41,44 +41,7 @@ export default async function TransparencyPage() {
       <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
-        <section className={styles.hero}>
-          <div className={styles.heroLeft}>
-            <div className={styles.eyebrow}>Audit log</div>
-            <h1 className={styles.h1}>Transparency</h1>
-            <p className={styles.lede}>
-              Receipts show what changed each day (snapshot → compute → trades).
-            </p>
-
-            <div className={styles.metaRow}>
-              <span className={styles.dot} />
-              <span className={styles.metaText}>As-of: {asOf}</span>
-            </div>
-
-            <div className={styles.actions}>
-              <a className={styles.primaryBtn} href="#receipts">
-                View receipts ↓
-              </a>
-              <a className={styles.ghostBtn} href="/portfolio">
-                Open portfolio →
-              </a>
-              <a className={styles.ghostBtn} href="/performance">
-                Performance →
-              </a>
-            </div>
-          </div>
-
-          <div className={styles.heroRight}>
-            <div className={styles.cardLabel}>Latest snapshot</div>
-            <div className={styles.snapWrap}>
-               <SnapshotCard
-                note={summary.note}
-                kpis={summary.kpis}
-                href={"/portfolio"}
-
-              />
-            </div>
-          </div>
-        </section>
+        <TransparencyHero asOf={asOf} summary={summary} />
 
         <section id="receipts" className={styles.receipts}>
           <div className={styles.sectionTop}>
@@ -100,7 +63,8 @@ export default async function TransparencyPage() {
               <div className={styles.empty}>
                 <div className={styles.emptyTitle}>No receipts yet</div>
                 <div className={styles.emptySub}>
-                  Upload two positions CSVs on two different as_of dates so /history/activity can detect sells/buys.
+                  Upload two positions CSVs on two different as_of dates so /history/activity can
+                  detect sells/buys.
                 </div>
               </div>
             )}
@@ -108,11 +72,17 @@ export default async function TransparencyPage() {
         </section>
 
         <section className={styles.navRow}>
-          <a className={styles.navLink} href="/portfolio">Portfolio</a>
+          <a className={styles.navLink} href="/portfolio">
+            Portfolio
+          </a>
           <span className={styles.navSep}>•</span>
-          <a className={styles.navLink} href="/performance">Performance</a>
+          <a className={styles.navLink} href="/performance">
+            Performance
+          </a>
           <span className={styles.navSep}>•</span>
-          <a className={styles.navLink} href="/trades">Journal</a>
+          <a className={styles.navLink} href="/trades">
+            Journal
+          </a>
         </section>
       </main>
 

@@ -1,0 +1,261 @@
+/* src/componets/Sections/Upload/UploadCard/UploadCard.module.css */
+.card {
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 20px;
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.94);
+  background: radial-gradient(1200px 220px at 20% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+    rgba(0, 0, 0, 0.3);
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: radial-gradient(1200px 220px at 20% 0%, rgba(255, 255, 255, 0.085), transparent 60%),
+    rgba(0, 0, 0, 0.36);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.cardPurpose {
+  margin-top: 8px;
+  opacity: 0.88;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cardActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pickBtn,
+.uploadBtn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease,
+    box-shadow 120ms ease;
+  white-space: nowrap;
+}
+
+.pickBtn:hover,
+.uploadBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pickBtn:disabled,
+.uploadBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pickBtn:focus-visible,
+.uploadBtn:focus-visible,
+.clearBtn:focus-visible,
+.dateInput:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(170, 120, 255, 0.12);
+  border-color: rgba(170, 120, 255, 0.55);
+}
+
+.uploadBtn {
+  border-color: rgba(170, 120, 255, 0.35);
+  background: rgba(170, 120, 255, 0.14);
+}
+
+.uploadBtn:hover {
+  border-color: rgba(170, 120, 255, 0.62);
+  background: rgba(170, 120, 255, 0.18);
+}
+
+.section {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sectionLabel {
+  font-size: 12px;
+  opacity: 0.78;
+  margin-bottom: 6px;
+  letter-spacing: 0.01em;
+}
+
+.sectionValue {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sectionValueRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.dateInput {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  outline: none;
+}
+
+.pickerRow {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pickerLeft {
+  min-width: 0;
+  flex: 1;
+}
+
+.pickerLabel {
+  font-size: 12px;
+  opacity: 0.78;
+  margin-bottom: 6px;
+}
+
+.pickerValue {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.clearBtn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease,
+    box-shadow 120ms ease;
+  white-space: nowrap;
+}
+
+.clearBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.clearBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.metaRow {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.metaItem {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 6px;
+}
+
+.metaLabel {
+  font-size: 12px;
+  opacity: 0.78;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 12px;
+  opacity: 0.92;
+  overflow-wrap: anywhere;
+}
+
+.strong {
+  font-weight: 900;
+}
+
+.sep {
+  opacity: 0.6;
+}
+
+.dim {
+  opacity: 0.75;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .cardActions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+  .cardHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pickerRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .clearBtn {
+    align-self: flex-start;
+  }
+}

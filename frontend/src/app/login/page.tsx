@@ -4,11 +4,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 
-import Header from "../../componets/Header_bar/Header_bar";
-import Footer from "../../componets/Footer/Footer";
-import { BRAND_NAME, LINKS } from "../../lib/site";
+import Header from "@/componets/UI/Header_bar/Header_bar";
+import Footer from "@/componets/UI/Footer/Footer";
+import { BRAND_NAME, LINKS } from "@/lib/site";
 
-import { login, checkSession } from "../../lib/login";
+import { login, checkSession } from "@/lib/login";
 
 export default function LoginPage() {
   const [emailOrUser, setEmailOrUser] = useState("");
