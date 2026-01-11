@@ -71,19 +71,6 @@ export default async function TransparencyPage() {
           </div>
         </section>
 
-        <section className={styles.navRow}>
-          <a className={styles.navLink} href="/portfolio">
-            Portfolio
-          </a>
-          <span className={styles.navSep}>•</span>
-          <a className={styles.navLink} href="/performance">
-            Performance
-          </a>
-          <span className={styles.navSep}>•</span>
-          <a className={styles.navLink} href="/trades">
-            Journal
-          </a>
-        </section>
       </main>
 
       <Footer />

@@ -7,9 +7,13 @@ export const LINKS = [
   { label: "Portfolio", href: "/portfolio" },
 
 
+
   { label: "Performance", href: "/performance" },
 
   { label: "Newsletter", href: "/newsletter" },
+
+  { label: "Archive", href: "/archive" },
+
 
   { label: "Transparency", href: "/transparency" },
 ] as const;

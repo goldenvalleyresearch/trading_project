@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "The Obvious Trades",
+  title: "Golden Valley Market Research",
 };
 
 export default function RootLayout({

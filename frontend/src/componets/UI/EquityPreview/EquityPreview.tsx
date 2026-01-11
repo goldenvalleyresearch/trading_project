@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { apiGet } from "@/lib/api";
 
-type RangeKey = "1M" | "3M" | "1Y" | "ALL";
+type RangeKey = "1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
 
 type Props = {
   height?: number;
@@ -22,7 +22,6 @@ type Props = {
   range?: RangeKey;
   onRangeChange?: (r: RangeKey) => void;
 
-  // sends back the SAME portfolio series used in the chart (so KPIs match)
   onData?: (points: Point[]) => void;
 
   showSpy?: boolean;
@@ -33,19 +32,28 @@ type Props = {
 type Point = { d: string; v: number };
 type ChartRow = { d: string; p: number | null; b: number | null };
 
-const parseISO = (d: string) => new Date(String(d).slice(0, 10) + "T00:00:00");
-const toISO = (dt: Date) => dt.toISOString().slice(0, 10);
-const addDays = (dt: Date, days: number) => {
-  const x = new Date(dt);
-  x.setDate(x.getDate() + days);
-  return x;
-};
+const parseISO = (d: string) => new Date(String(d).slice(0, 10) + "T00:00:00Z");
 
-function rangeToWindow(range: RangeKey) {
-  if (range === "1M") return 30;
-  if (range === "3M") return 90;
-  if (range === "1Y") return 365;
+function apiRangeForBenchmark(range: RangeKey): "1M" | "3M" | "1Y" | "ALL" {
+  if (range === "1D" || range === "5D" || range === "1M") return "1M";
+  if (range === "3M") return "3M";
+  if (range === "6M" || range === "1Y") return "1Y";
+  return "ALL";
+}
+
+function desiredPoints(range: RangeKey) {
+  if (range === "1D") return 2;
+  if (range === "5D") return 6;
+  if (range === "1M") return 22;
+  if (range === "3M") return 63;
+  if (range === "6M") return 126;
+  if (range === "1Y") return 252;
   return 10000;
+}
+
+function fetchWindow(range: RangeKey) {
+  const need = desiredPoints(range);
+  return Math.min(10000, need + 220);
 }
 
 function normalizeEquity(input: unknown): Point[] {
@@ -87,69 +95,46 @@ function normalizeSeriesClose(input: unknown): Point[] {
 }
 
 function sortByDate(points: Point[]) {
-  return [...points].sort(
-    (a, b) => parseISO(a.d).getTime() - parseISO(b.d).getTime()
-  );
+  return [...points].sort((a, b) => parseISO(a.d).getTime() - parseISO(b.d).getTime());
 }
 
-function fillDaily(points: Point[]): Point[] {
-  if (points.length < 2) return points;
-  const sorted = sortByDate(points);
-  const out: Point[] = [];
+function uniqByDayKeepLast(points: Point[]) {
+  const m = new Map<string, number>();
+  for (const p of points) m.set(p.d.slice(0, 10), p.v);
+  const days = Array.from(m.keys()).sort((a, b) => parseISO(a).getTime() - parseISO(b).getTime());
+  return days.map((d) => ({ d, v: m.get(d)! }));
+}
 
-  for (let i = 0; i < sorted.length; i++) {
-    const cur = sorted[i];
-    out.push(cur);
+function buildTimelineFromBenchmarkDates(port: Point[], bench: Point[]) {
+  const pMap = new Map(port.map((x) => [x.d.slice(0, 10), x.v]));
+  const bMap = new Map(bench.map((x) => [x.d.slice(0, 10), x.v]));
 
-    const next = sorted[i + 1];
-    if (!next) break;
+  const dates = bench.length
+    ? bench.map((x) => x.d.slice(0, 10))
+    : Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
+        (a, c) => parseISO(a).getTime() - parseISO(c).getTime()
+      );
 
-    const curDt = parseISO(cur.d);
-    const nextDt = parseISO(next.d);
-    const gap = Math.round(
-      (nextDt.getTime() - curDt.getTime()) / 86400000
-    );
+  let started = false;
+  let lastP: number | null = null;
 
-    if (gap <= 1) continue;
+  return dates.map<ChartRow>((d) => {
+    const rawP = pMap.has(d) ? (pMap.get(d) as number) : null;
+    const b = bMap.has(d) ? (bMap.get(d) as number) : null;
 
-    // linear interpolate missing days
-    for (let k = 1; k < gap; k++) {
-      const t = k / gap;
-      const v = cur.v + (next.v - cur.v) * t;
-      out.push({ d: toISO(addDays(curDt, k)), v: Number(v.toFixed(2)) });
+    if (rawP != null) {
+      started = true;
+      lastP = rawP;
     }
-  }
-  return out;
-}
 
-function sliceForRangeDaily(data: ChartRow[], range: RangeKey) {
-  const n = rangeToWindow(range);
-  return data.slice(-n);
-}
+    const p = started ? lastP : null;
 
-function makeTickFormatter(range: RangeKey) {
-  return (label: string) => {
-    const dt = parseISO(label);
-    return range === "1M" || range === "3M"
-      ? dt.toLocaleDateString(undefined, { month: "short", day: "2-digit" })
-      : dt.toLocaleDateString(undefined, { month: "short" });
-  };
-}
-
-function tooltipLabel(label: string) {
-  const dt = parseISO(label);
-  return dt.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
+    return { d, p, b };
   });
 }
 
 function rebaseBothTo100(rows: ChartRow[]) {
-  // choose first date where BOTH exist (so comparison is fair)
-  const baseRow = rows.find(
-    (r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN)
-  );
+  const baseRow = rows.find((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
   if (!baseRow) return rows;
 
   const p0 = baseRow.p as number;
@@ -163,14 +148,53 @@ function rebaseBothTo100(rows: ChartRow[]) {
   }));
 }
 
-const fmtUSD = (n: number) =>
-  Number.isFinite(n)
-    ? n.toLocaleString(undefined, { style: "currency", currency: "USD" })
-    : "—";
+function makeTickFormatter(range: RangeKey) {
+  return (label: string) => {
+    const dt = parseISO(label);
+    if (!Number.isFinite(dt.getTime())) return String(label);
 
-// show percent change from rebased 100
-const fmtPctFrom100 = (n: number) =>
-  Number.isFinite(n) ? `${(n - 100).toFixed(2)}%` : "—";
+    if (range === "1D")
+      return dt.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+    if (range === "5D")
+      return dt.toLocaleDateString(undefined, { weekday: "short" });
+    if (range === "1M" || range === "3M")
+      return dt.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+
+    return dt.toLocaleDateString(undefined, { month: "short" });
+  };
+}
+
+function tooltipLabel(label: string) {
+  const dt = parseISO(label);
+  if (!Number.isFinite(dt.getTime())) return String(label);
+  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+}
+
+const fmtUSD = (n: number) =>
+  Number.isFinite(n) ? n.toLocaleString(undefined, { style: "currency", currency: "USD" }) : "—";
+
+const fmtPctFrom100 = (n: number) => (Number.isFinite(n) ? `${(n - 100).toFixed(2)}%` : "—");
+
+function intervalFor(range: RangeKey, len: number) {
+  if (len <= 2) return 0;
+  const target =
+    range === "1D"
+      ? 2
+      : range === "5D"
+      ? 6
+      : range === "1M"
+      ? 10
+      : range === "3M"
+      ? 10
+      : range === "6M"
+      ? 7
+      : range === "1Y"
+      ? 12
+      : 10;
+
+  const skip = Math.max(0, Math.ceil(len / target) - 1);
+  return skip;
+}
 
 export default function EquityPreview({
   height = 190,
@@ -197,21 +221,17 @@ export default function EquityPreview({
   const [err, setErr] = useState<string | null>(null);
   const [benchErr, setBenchErr] = useState<string | null>(null);
 
-  // ✅ prevent onData spam / loops
   const lastSentRef = useRef<string>("");
 
-  // equity (TWR mode = performance only, excludes contributions)
   useEffect(() => {
     const controller = new AbortController();
-    const window = rangeToWindow(range);
+    const window = fetchWindow(range);
 
     (async () => {
       try {
         setLoading(true);
         setErr(null);
-        const json = await apiGet<unknown>(
-          `/api/portfolio/equity-curve?window=${window}&mode=twr`
-        );
+        const json = await apiGet<unknown>(`/api/portfolio/equity-curve?window=${window}&mode=twr`);
         setEquityRemote(json);
       } catch (e: any) {
         if (controller.signal.aborted) return;
@@ -225,21 +245,6 @@ export default function EquityPreview({
     return () => controller.abort();
   }, [range]);
 
-  // send portfolio series up (same source of truth as the chart)
-  useEffect(() => {
-    if (!onData) return;
-
-    const equityPts = fillDaily(sortByDate(normalizeEquity(equityRemote)));
-    const lastD = equityPts.length ? equityPts[equityPts.length - 1].d : "";
-    const key = `${equityPts.length}:${lastD}`;
-
-    if (lastSentRef.current === key) return;
-    lastSentRef.current = key;
-
-    onData(equityPts);
-  }, [equityRemote, onData]);
-
-  // benchmark
   useEffect(() => {
     if (!showSpy) {
       setBenchRemote(null);
@@ -253,10 +258,9 @@ export default function EquityPreview({
       try {
         setBenchErr(null);
         const sym = (spySymbol || "SPY").trim().toUpperCase();
+        const apiRange = apiRangeForBenchmark(range);
         const json = await apiGet<unknown>(
-          `/api/benchmark/price-series?symbol=${encodeURIComponent(
-            sym
-          )}&range=${encodeURIComponent(range)}`
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(apiRange)}`
         );
         setBenchRemote(json);
       } catch (e: any) {
@@ -270,72 +274,53 @@ export default function EquityPreview({
   }, [range, showSpy, spySymbol]);
 
   const chartData = useMemo(() => {
-    const equityPts = fillDaily(sortByDate(normalizeEquity(equityRemote)));
-    const benchPts = fillDaily(sortByDate(normalizeSeriesClose(benchRemote)));
+    const need = desiredPoints(range);
 
-    if (equityPts.length === 0) return [];
+    const eq = uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote)));
+    const bench = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(benchRemote)));
 
-    const pMap = new Map(equityPts.map((p) => [p.d, p.v]));
-    const bMap = new Map(benchPts.map((p) => [p.d, p.v]));
+    if (eq.length === 0) return [];
 
-    const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
-      (a, b) => parseISO(a).getTime() - parseISO(b).getTime()
-    );
+    const timeline = buildTimelineFromBenchmarkDates(eq, showSpy && !benchErr ? bench : []);
+    const sliced = timeline.length > need ? timeline.slice(timeline.length - need) : timeline;
 
-    const merged: ChartRow[] = dates.map((d) => ({
-      d,
-      p: pMap.has(d) ? (pMap.get(d) as number) : null,
-      b: bMap.has(d) ? (bMap.get(d) as number) : null,
-    }));
+    if (sliced.length < 2) return [];
+    return rebaseTo100 && showSpy && !benchErr && bench.length ? rebaseBothTo100(sliced) : sliced;
+  }, [equityRemote, benchRemote, range, rebaseTo100, showSpy, benchErr]);
 
-    const sliced = sliceForRangeDaily(merged, range);
-    return rebaseTo100 && showSpy ? rebaseBothTo100(sliced) : sliced;
-  }, [equityRemote, benchRemote, range, rebaseTo100, showSpy]);
+  useEffect(() => {
+    if (!onData) return;
+    const eq = uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote)));
+    const lastD = eq.length ? eq[eq.length - 1].d : "";
+    const key = `${eq.length}:${lastD}`;
+    if (lastSentRef.current === key) return;
+    lastSentRef.current = key;
+    onData(eq);
+  }, [equityRemote, onData]);
 
   const tickFormatter = useMemo(() => makeTickFormatter(range), [range]);
-  const xInterval = range === "1M" ? 4 : range === "3M" ? 12 : "preserveStartEnd";
-
-  const tooltipFmt = rebaseTo100 && showSpy ? fmtPctFrom100 : fmtUSD;
+  const xInterval = useMemo(() => intervalFor(range, chartData.length), [range, chartData.length]);
+  const tooltipFmt = rebaseTo100 && showSpy && !benchErr ? fmtPctFrom100 : fmtUSD;
 
   if (loading && chartData.length === 0) {
-    return (
-      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
-        Loading…
-      </div>
-    );
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Loading…</div>;
   }
   if (err && chartData.length === 0) {
-    return (
-      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
-        Failed: {err}
-      </div>
-    );
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Failed: {err}</div>;
   }
   if (chartData.length === 0) {
-    return (
-      <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>
-        No equity data.
-      </div>
-    );
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>No equity data.</div>;
   }
 
   return (
     <div>
       {showControls && (
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          <button type="button" onClick={() => setRange("1M")} style={btn(range === "1M")}>
-            1M
-          </button>
-          <button type="button" onClick={() => setRange("3M")} style={btn(range === "3M")}>
-            3M
-          </button>
-          <button type="button" onClick={() => setRange("1Y")} style={btn(range === "1Y")}>
-            1Y
-          </button>
-          <button type="button" onClick={() => setRange("ALL")} style={btn(range === "ALL")}>
-            All
-          </button>
-
+          {(["1D", "5D", "1M", "3M", "6M", "1Y", "ALL"] as RangeKey[]).map((r) => (
+            <button key={r} type="button" onClick={() => setRange(r)} style={btn(range === r)}>
+              {r}
+            </button>
+          ))}
           {showSpy && (
             <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
               {benchErr ? "Benchmark: S&P 500 (off)" : "Benchmark: S&P 500"}
@@ -353,7 +338,7 @@ export default function EquityPreview({
             axisLine={false}
             tickLine={false}
             interval={xInterval as any}
-            minTickGap={18}
+            minTickGap={12}
             tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
             tickFormatter={tickFormatter}
           />
@@ -398,7 +383,7 @@ export default function EquityPreview({
         </LineChart>
       </ResponsiveContainer>
 
-      {rebaseTo100 && showSpy && (
+      {rebaseTo100 && showSpy && !benchErr && (
         <div style={{ fontSize: 11, opacity: 0.65, marginTop: 6 }}>
           Rebasing enabled (start = 100) using first shared date.
         </div>

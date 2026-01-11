@@ -19,7 +19,7 @@ export default function NewsletterPage() {
   async function onSubscribe() {
     const e = email.trim();
     if (!isValidEmail(e)) {
-      setErr("Enter a valid email.");
+      setErr("Enter a valid email address.");
       setMsg(null);
       return;
     }
@@ -32,13 +32,13 @@ export default function NewsletterPage() {
       const res = await subscribeNewsletter(e);
       setMsg(
         res.status === "already_subscribed"
-          ? "You’re already subscribed."
-          : "Subscribed. Check your inbox."
+          ? "You’re already on the list."
+          : "Subscribed — watch your inbox."
       );
 
       setEmail("");
     } catch (e: any) {
-      setErr(e?.message ?? "Subscribe failed.");
+      setErr(e?.message ?? "Subscription failed.");
     } finally {
       setLoading(false);
     }
@@ -49,77 +49,85 @@ export default function NewsletterPage() {
       <Header brand={BRAND_NAME} links={[...LINKS]} />
 
       <main className={styles.main}>
-        {/* HERO */}
         <section className={styles.hero}>
-          <div>
-            <h1 className={styles.h1}>Newsletter</h1>
+          <div className={styles.heroLeft}>
+            <div className={styles.kicker}>Newsletter</div>
+
+            <h1 className={styles.h1}>Get the Golden Valley newsletter.</h1>
+
             <p className={styles.lede}>
-              Clean market notes and trade context.  
-              Delivered by email. No noise.
+              One concise email when there’s something worth knowing —
+              no feeds, no noise, no hype.
             </p>
 
-            <div className={styles.meta}>
-              <span>Delivery: email</span>
-              <span>Low frequency</span>
-              <span>No spam</span>
+            <div className={styles.badges} aria-label="Newsletter properties">
+              <span className={styles.badge}>Short emails</span>
+              <span className={styles.badge}>Only when it matters</span>
+              <span className={styles.badge}>Unsubscribe anytime</span>
+            </div>
+
+            <div className={styles.heroCtas}>
+              <a className={styles.ghostBtn} href="/portfolio">
+                Open portfolio →
+              </a>
+              <a className={styles.secondaryBtn} href="/transparency">
+                See methodology →
+              </a>
+              <a href="/account/create" className={styles.premiumBtnInline}>
+                Premium emails →
+              </a>
             </div>
           </div>
 
-          <a className={styles.ghostBtn} href="/portfolio">
-            Open portfolio →
-          </a>
-        </section>
+          <aside className={styles.heroSignup} aria-label="Newsletter signup">
+            <div className={styles.heroSignupGlow} aria-hidden="true" />
 
-        {/* SIGNUP CARD */}
-        <section className={styles.card}>
-          <div className={styles.cardTop}>
-            <div>
-              <div className={styles.cardTitle}>Get updates by email</div>
-              <div className={styles.cardSub}>
-                Only new posts and major updates.
+            <div className={styles.heroSignupTop}>
+              <div className={styles.heroSignupTitle}>Get the next note</div>
+              <div className={styles.heroSignupSub}>
+                We email when there’s something actionable.
               </div>
             </div>
 
-            <a
-              href="/account/create"
-              className={styles.premiumBtn}
-            >
-              Premium emails →
-            </a>
-          </div>
+            <label className={styles.label} htmlFor="email">
+              Your email
+            </label>
 
-          <div className={styles.form}>
-            <input
-              className={styles.input}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@domain.com"
-              inputMode="email"
-              autoComplete="email"
-            />
+            <div className={styles.formRow}>
+              <input
+                id="email"
+                className={styles.input}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@domain.com"
+                inputMode="email"
+                autoComplete="email"
+              />
 
-            <button
-              className={styles.primaryBtn}
-              onClick={onSubscribe}
-              disabled={loading}
-            >
-              {loading ? "Signing up…" : "Sign up"}
-            </button>
+              <button
+                className={styles.primaryBtn}
+                onClick={onSubscribe}
+                disabled={loading}
+              >
+                {loading ? "Subscribing…" : "Get updates"}
+              </button>
+            </div>
 
-            <div className={styles.finePrint}>
-              Unsubscribe anytime.
+            <div className={styles.fineRow}>
+              <span className={styles.finePrint}>No spam.</span>
+              <span className={styles.fineDivider}>•</span>
+              <span className={styles.finePrint}>One-click unsubscribe.</span>
             </div>
 
             {(msg || err) && (
-              <div className={err ? styles.toastErr : styles.toastOk}>
+              <div className={err ? styles.toastErr : styles.toastOk} role="status">
                 {err ?? msg}
               </div>
             )}
-          </div>
+          </aside>
         </section>
 
-        {/* NAV */}
-        <section className={styles.navGrid}>
+        <section className={styles.navGrid} aria-label="Explore">
           <FeatureCard
             title="Performance"
             body="Equity curve, drawdowns, and benchmark comparisons."

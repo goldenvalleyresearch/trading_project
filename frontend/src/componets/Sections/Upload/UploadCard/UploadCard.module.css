@@ -1,13 +1,23 @@
-/* src/componets/Sections/Upload/UploadCard/UploadCard.module.css */
-.card {
-  text-align: left;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 20px;
-  padding: 16px;
-  color: rgba(255, 255, 255, 0.94);
-  background: radial-gradient(1200px 220px at 20% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
-    rgba(0, 0, 0, 0.3);
-  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+.card{
+  text-align:left;
+  border:1px solid rgba(255,255,255,0.14);
+  border-radius:20px;
+  padding:16px;
+  color:rgba(255,255,255,0.94);
+  background:radial-gradient(1200px 220px at 20% 0%, rgba(255,255,255,0.06), transparent 60%),
+    rgba(0,0,0,0.3);
+  transition:transform 120ms ease, border-color 120ms ease, background 120ms ease;
+
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+
+.metaRow{
+  margin-top:auto;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
 }
 
 .card:hover {
@@ -194,13 +204,6 @@
   opacity: 0.45;
   cursor: not-allowed;
   transform: none;
-}
-
-.metaRow {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
 }
 
 .metaItem {

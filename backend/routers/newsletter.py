@@ -18,7 +18,23 @@ router = APIRouter(prefix="/api/newsletter", tags=["Newsletter"])
 admin_router = APIRouter(prefix="/api/admin/newsletter", tags=["Admin Newsletter"])
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-MAX_SUBS = 10000
+MAX_SUBS = 20000
+
+
+class NewsletterSendItem(BaseModel):
+    id: str
+    mode: str
+    subject: str
+    sent: int = 0
+    skipped: int = 0
+    errors: List[str] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+    text: Optional[str] = None
+    html: Optional[str] = None
+
+
+class NewsletterListResp(BaseModel):
+    items: List[NewsletterSendItem]
 
 
 def utcnow() -> datetime:
@@ -69,7 +85,7 @@ def _footer_with_unsub(token: str) -> str:
     link = _make_unsub_link(token)
     return (
         "\n\n---\n"
-        "You are receiving this because you subscribed to Obvious Trades updates.\n"
+        "You are receiving this because you subscribed to Golden Valley Market Research updates.\n"
         f"Unsubscribe: {link}\n"
     )
 
@@ -92,7 +108,7 @@ async def _send_email_provider(*, to_email: str, subject: str, text_body: str) -
     }
 
     payload = {
-        "sender": {"email": from_email, "name": "Obvious Trades"},
+        "sender": {"email": from_email, "name": "Golden Valley Market Research"},
         "to": [{"email": to_email}],
         "subject": subject,
         "textContent": text_body,
@@ -276,6 +292,8 @@ async def send_newsletter(req: Request, body: SendReq):
         {
             "mode": body.mode,
             "subject": subject,
+            "text": msg,
+            "html": None,
             "sent": sent,
             "skipped": skipped,
             "errors": errors[:50],
@@ -285,3 +303,90 @@ async def send_newsletter(req: Request, body: SendReq):
 
     msg_out = "Sent." if not errors else f"Sent with {len(errors)} error(s)."
     return {"ok": True, "sent": sent, "skipped": skipped + len(errors), "message": msg_out}
+
+
+@router.get("/sends", response_model=NewsletterListResp)
+async def list_sends_public(
+    limit: int = Query(75, ge=1, le=200),
+    q: str = Query("", max_length=200),
+):
+    db = get_db()
+    col = db["newsletter_sends"]
+
+    query: Dict[str, Any] = {}
+    term = (q or "").strip()
+    if term:
+        query = {
+            "$or": [
+                {"subject": {"$regex": re.escape(term), "$options": "i"}},
+                {"mode": {"$regex": re.escape(term), "$options": "i"}},
+                {"text": {"$regex": re.escape(term), "$options": "i"}},
+                {"html": {"$regex": re.escape(term), "$options": "i"}},
+            ]
+        }
+
+    cur = col.find(query).sort("created_at", -1).limit(limit)
+    docs = await cur.to_list(length=limit)
+
+    items: List[NewsletterSendItem] = []
+    for d in docs:
+        items.append(
+            NewsletterSendItem(
+                id=str(d.get("_id")),
+                mode=str(d.get("mode") or ""),
+                subject=str(d.get("subject") or ""),
+                sent=int(d.get("sent") or 0),
+                skipped=int(d.get("skipped") or 0),
+                errors=list(d.get("errors") or []),
+                created_at=d.get("created_at"),
+                text=d.get("text"),
+                html=d.get("html"),
+            )
+        )
+
+    return {"items": items}
+
+
+@admin_router.get("/sends", response_model=NewsletterListResp)
+async def list_sends(
+    req: Request,
+    limit: int = Query(75, ge=1, le=200),
+    q: str = Query("", max_length=200),
+):
+    _require_admin(req)
+
+    db = get_db()
+    col = db["newsletter_sends"]
+
+    query: Dict[str, Any] = {}
+    term = (q or "").strip()
+    if term:
+        query = {
+            "$or": [
+                {"subject": {"$regex": re.escape(term), "$options": "i"}},
+                {"mode": {"$regex": re.escape(term), "$options": "i"}},
+                {"text": {"$regex": re.escape(term), "$options": "i"}},
+                {"html": {"$regex": re.escape(term), "$options": "i"}},
+            ]
+        }
+
+    cur = col.find(query).sort("created_at", -1).limit(limit)
+    docs = await cur.to_list(length=limit)
+
+    items: List[NewsletterSendItem] = []
+    for d in docs:
+        items.append(
+            NewsletterSendItem(
+                id=str(d.get("_id")),
+                mode=str(d.get("mode") or ""),
+                subject=str(d.get("subject") or ""),
+                sent=int(d.get("sent") or 0),
+                skipped=int(d.get("skipped") or 0),
+                errors=list(d.get("errors") or []),
+                created_at=d.get("created_at"),
+                text=d.get("text"),
+                html=d.get("html"),
+            )
+        )
+
+    return {"items": items}

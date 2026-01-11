@@ -6,7 +6,8 @@ import EquityPreview from "@/componets/UI/EquityPreview/EquityPreview";
 import { apiGet } from "@/lib/api";
 
 type EquityPoint = { d: string; v: number };
-type RangeKey = "1M" | "3M" | "1Y" | "ALL";
+type RangeKey = "1D" | "5D" | "1M" | "6M" | "1Y" | "ALL";
+type BenchRange = "1M" | "3M" | "1Y" | "ALL";
 
 function pctStr(x: number | null | undefined): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return "—";
@@ -78,11 +79,11 @@ function computeSharpe(points: EquityPoint[]): number | null {
 }
 
 function normalizeCloseSeries(input: any): EquityPoint[] {
-  const arr: any[] = Array.isArray(input?.series) ? input.series : [];
+  const arr: any[] = Array.isArray(input?.series) ? input.series : Array.isArray(input) ? input : [];
   return arr
     .map((p) => ({
-      d: String(p?.date ?? "").slice(0, 10),
-      v: Number(p?.close),
+      d: String(p?.date ?? p?.d ?? "").slice(0, 10),
+      v: Number(p?.close ?? p?.c ?? p?.price ?? p?.v),
     }))
     .filter((p) => p.d.length === 10 && Number.isFinite(p.v));
 }
@@ -101,6 +102,12 @@ function computeVsSPY(port: EquityPoint[], spy: EquityPoint[]): number | null {
   if (portC == null || spyC == null) return null;
 
   return portC - spyC;
+}
+
+function apiRange(r: RangeKey): BenchRange {
+  if (r === "1D" || r === "5D" || r === "1M") return "1M";
+  if (r === "6M" || r === "1Y") return "1Y";
+  return "ALL";
 }
 
 export default function PerformanceChartCard() {
@@ -137,7 +144,7 @@ export default function PerformanceChartCard() {
       try {
         setSpyErr(null);
         const j: any = await apiGet(
-          `/api/benchmark/price-series?symbol=SPY&range=${encodeURIComponent(range)}&max_age_sec=${maxAgeSec}`
+          `/api/benchmark/price-series?symbol=SPY&range=${encodeURIComponent(apiRange(range))}&max_age_sec=${maxAgeSec}`
         );
         setSpyPoints(normalizeCloseSeries(j));
       } catch (e: any) {
@@ -156,6 +163,8 @@ export default function PerformanceChartCard() {
     return computeVsSPY(points, spyPoints);
   }, [points, spyPoints, spyErr]);
 
+  const ranges: RangeKey[] = ["1D", "5D", "1M", "6M", "1Y", "ALL"];
+
   return (
     <section className={styles.chartCard}>
       <div className={styles.chartTop}>
@@ -166,34 +175,16 @@ export default function PerformanceChartCard() {
 
         <div className={styles.controls}>
           <div className={styles.range}>
-            <button
-              className={`${styles.rangeBtn} ${range === "1M" ? styles.rangeActive : ""}`}
-              onClick={() => setRange("1M")}
-              type="button"
-            >
-              1M
-            </button>
-            <button
-              className={`${styles.rangeBtn} ${range === "3M" ? styles.rangeActive : ""}`}
-              onClick={() => setRange("3M")}
-              type="button"
-            >
-              3M
-            </button>
-            <button
-              className={`${styles.rangeBtn} ${range === "1Y" ? styles.rangeActive : ""}`}
-              onClick={() => setRange("1Y")}
-              type="button"
-            >
-              1Y
-            </button>
-            <button
-              className={`${styles.rangeBtn} ${range === "ALL" ? styles.rangeActive : ""}`}
-              onClick={() => setRange("ALL")}
-              type="button"
-            >
-              All
-            </button>
+            {ranges.map((r) => (
+              <button
+                key={r}
+                className={`${styles.rangeBtn} ${range === r ? styles.rangeActive : ""}`}
+                onClick={() => setRange(r)}
+                type="button"
+              >
+                {r}
+              </button>
+            ))}
           </div>
 
           <div className={styles.benchmark}>
@@ -207,8 +198,8 @@ export default function PerformanceChartCard() {
         <EquityPreview
           height={230}
           showControls={false}
-          range={range}
-          onRangeChange={setRange}
+          range={range as any}
+          onRangeChange={setRange as any}
           rebaseTo100={true}
           showSpy={true}
           spySymbol="SPY"

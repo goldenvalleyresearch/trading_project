@@ -28,7 +28,9 @@ import {
 const ACCEPT =
   ".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-const KEYS = ["positions", "performance", "fundamentals", "factors"] as UploadKey[];
+const KEYS = ["positions", "performance",
+   //"fundamentals", "factors"
+  ] as UploadKey[];
 
 const CONFIG: Record<
   UploadKey,
@@ -89,6 +91,7 @@ const CONFIG: Record<
 };
 
 type LastInfo = { date?: string; file?: string };
+
 
 function todayIso(): string {
   const d = new Date();
@@ -332,6 +335,12 @@ export default function UploadPage() {
     }
   }
 
+
+  useEffect(() => {
+  if (!err && !ok) return;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}, [err, ok]);
+
   if (!allowed) return null;
 
   return (
@@ -428,11 +437,6 @@ export default function UploadPage() {
                 onFileChange={(e) => onFileChange(k, e)}
               />
             ))}
-          </div>
-
-          <div className={styles.note}>
-            Admin-only. Uses cookies for auth. If you see a <span className={styles.mono}>401</span>,
-            log in as admin.
           </div>
         </div>
       </main>
