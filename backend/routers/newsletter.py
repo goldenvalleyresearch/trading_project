@@ -313,17 +313,23 @@ async def list_sends_public(
     db = get_db()
     col = db["newsletter_sends"]
 
-    query: Dict[str, Any] = {}
     term = (q or "").strip()
     if term:
-        query = {
-            "$or": [
-                {"subject": {"$regex": re.escape(term), "$options": "i"}},
-                {"mode": {"$regex": re.escape(term), "$options": "i"}},
-                {"text": {"$regex": re.escape(term), "$options": "i"}},
-                {"html": {"$regex": re.escape(term), "$options": "i"}},
+        query: Dict[str, Any] = {
+            "$and": [
+                {"sent": {"$gt": 0}},
+                {
+                    "$or": [
+                        {"subject": {"$regex": re.escape(term), "$options": "i"}},
+                        {"mode": {"$regex": re.escape(term), "$options": "i"}},
+                        {"text": {"$regex": re.escape(term), "$options": "i"}},
+                        {"html": {"$regex": re.escape(term), "$options": "i"}},
+                    ]
+                },
             ]
         }
+    else:
+        query = {"sent": {"$gt": 0}}
 
     cur = col.find(query).sort("created_at", -1).limit(limit)
     docs = await cur.to_list(length=limit)

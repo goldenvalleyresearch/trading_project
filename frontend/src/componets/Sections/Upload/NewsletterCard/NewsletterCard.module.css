@@ -1,4 +1,9 @@
 .card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+
   text-align: left;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 20px;
@@ -27,12 +32,15 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .titleWrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .cardTitle {
@@ -70,6 +78,8 @@
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .pickBtn,
@@ -84,6 +94,7 @@
   cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .pickBtn:hover,
@@ -111,12 +122,19 @@
 }
 
 .form {
+  width: 100%;
+  max-width: 100%;
   margin-top: 12px;
   display: grid;
   gap: 12px;
 }
 
 .field {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+
   padding: 12px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -129,6 +147,7 @@
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .label {
@@ -138,6 +157,7 @@
   font-size: 12px;
   opacity: 0.82;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .optional {
@@ -163,17 +183,25 @@
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .inlineRow {
   width: 100%;
   display: flex;
   gap: 10px;
+  min-width: 0;
 }
 
 .textInput,
 .textArea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+
   border-radius: 12px;
   padding: 11px 12px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -203,6 +231,8 @@
   margin-top: 8px;
   font-size: 12px;
   opacity: 0.75;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .metaRow {
@@ -217,16 +247,21 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .lastSent {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .endpoint {
   font-size: 12px;
   opacity: 0.85;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dim {
@@ -237,6 +272,8 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   opacity: 0.95;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 560px) {

@@ -167,6 +167,23 @@
   overflow: hidden;
 }
 
+.sidebarTop{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px;
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 2;
+}
+
+.metaSmall{
+  margin-left:auto;
+  font-size:12px;
+  opacity:.7;
+}
+
 .readerTop {
   display: flex;
   gap: 12px;

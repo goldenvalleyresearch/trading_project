@@ -1,4 +1,3 @@
-// app/newsletter/archive/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -49,35 +48,50 @@ function wrapDoc(html: string) {
 </html>`;
 }
 
+const STEP = 75;
+const MAX_LIMIT = 200;
+
 export default function NewsletterArchivePage() {
   const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(STEP);
+
   const [items, setItems] = useState<NewsletterListItem[]>([]);
   const [selected, setSelected] = useState<NewsletterListItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  const canLoadMore = limit < MAX_LIMIT && items.length >= limit;
+
+  async function fetchList(nextLimit: number, nextQ: string, keepSelectedId?: string | null) {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await listNewsletters({ limit: nextLimit, q: nextQ });
+      setItems(res.items);
+      setSelected((cur) => {
+        const want = keepSelectedId ?? cur?.id ?? null;
+        if (want) return res.items.find((x) => x.id === want) ?? res.items[0] ?? null;
+        return res.items[0] ?? null;
+      });
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to load newsletters");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
-        const res = await listNewsletters({ limit: 75, q: "" });
-        if (!alive) return;
-        setItems(res.items);
-        setSelected(res.items[0] ?? null);
-      } catch (e: any) {
-        if (!alive) return;
-        setErr(e?.message ?? "Failed to load newsletters");
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    fetchList(STEP, "", null);
+    setLimit(STEP);
   }, []);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setLimit(STEP);
+      fetchList(STEP, q, selected?.id ?? null);
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [q]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -109,9 +123,7 @@ export default function NewsletterArchivePage() {
           <div className={styles.top}>
             <div className={styles.titleWrap}>
               <h1 className={styles.h1}>Newsletter Archive</h1>
-              <p className={styles.sub}>
-                Browse past sends pulled from the database. Search, click, and read.
-              </p>
+              <p className={styles.sub}>Browse past sends pulled from the database. Search, click, and read.</p>
             </div>
 
             <div className={styles.searchWrap}>
@@ -137,6 +149,34 @@ export default function NewsletterArchivePage() {
           ) : (
             <div className={styles.layout}>
               <aside className={styles.sidebar}>
+                <div className={styles.sidebarTop}>
+                  <button
+                    type="button"
+                    className={styles.smallBtn}
+                    onClick={() => fetchList(limit, q, selected?.id ?? null)}
+                    disabled={loading}
+                  >
+                    Refresh
+                  </button>
+
+                  <button
+                    type="button"
+                    className={styles.smallBtn}
+                    onClick={() => {
+                      const next = Math.min(MAX_LIMIT, limit + STEP);
+                      setLimit(next);
+                      fetchList(next, q, selected?.id ?? null);
+                    }}
+                    disabled={loading || !canLoadMore}
+                  >
+                    Load more
+                  </button>
+
+                  <div className={styles.metaSmall}>
+                    {items.length} loaded{limit >= MAX_LIMIT ? " (max)" : ""}
+                  </div>
+                </div>
+
                 {filtered.map((n) => {
                   const active = selected?.id === n.id;
                   const previewSrc = stripHtml(n.html ?? n.text ?? "");
@@ -175,29 +215,6 @@ export default function NewsletterArchivePage() {
                       <span className={styles.dot} />
                       <span>{(selected?.mode || "live").toUpperCase()}</span>
                     </div>
-                  </div>
-
-                  <div className={styles.readerActions}>
-                    <button
-                      type="button"
-                      className={styles.smallBtn}
-                      onClick={async () => {
-                        try {
-                          setLoading(true);
-                          const res = await listNewsletters({ limit: 75, q: "" });
-                          setItems(res.items);
-                          setSelected((cur) => {
-                            if (!cur) return res.items[0] ?? null;
-                            return res.items.find((x) => x.id === cur.id) ?? res.items[0] ?? null;
-                          });
-                        } finally {
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      Refresh
-                    </button>
                   </div>
                 </div>
 
