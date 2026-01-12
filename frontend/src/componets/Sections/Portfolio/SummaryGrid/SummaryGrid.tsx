@@ -36,7 +36,7 @@ export default function SummaryGrid({
     <section className={styles.grid2}>
       <div className={styles.cardStack}>
         <SnapshotCard
-
+          note={""}
           href={summary.href}
           kpis={summary.kpis}
           ctaLabel={summary.ctaLabel}
