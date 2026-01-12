@@ -47,9 +47,7 @@ export default async function TransparencyPage() {
           <div className={styles.sectionTop}>
             <div>
               <div className={styles.sectionTitle}>Receipts</div>
-              <div className={styles.sectionSub}>
-                Upload/compute + the actual BUY/SELL changes detected from snapshots.
-              </div>
+
             </div>
             <span className={styles.badge}>
               {typedEvents.length ? `${typedEvents.length} events` : "empty"}
@@ -62,10 +60,6 @@ export default async function TransparencyPage() {
             ) : (
               <div className={styles.empty}>
                 <div className={styles.emptyTitle}>No receipts yet</div>
-                <div className={styles.emptySub}>
-                  Upload two positions CSVs on two different as_of dates so /history/activity can
-                  detect sells/buys.
-                </div>
               </div>
             )}
           </div>

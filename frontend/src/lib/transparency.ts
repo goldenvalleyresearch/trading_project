@@ -1,4 +1,3 @@
-// src/lib/transparency.ts
 import { apiGet } from "./api";
 import type { SnapshotCardData } from "./portfolio";
 
@@ -60,10 +59,14 @@ function safeDate(s: unknown): string {
   return typeof s === "string" && s.length >= 10 ? s.slice(0, 10) : "—";
 }
 
-function pickLatestReceipt(receipts: ReceiptResp[]): ReceiptResp | null {
+function hasTrades(r: ReceiptResp | null | undefined): boolean {
+  return Array.isArray(r?.trades) && r!.trades.length > 0;
+}
+
+function pickLatestReceiptWithTrades(receipts: ReceiptResp[]): ReceiptResp | null {
   if (!Array.isArray(receipts) || receipts.length === 0) return null;
   const sorted = [...receipts].sort((a, b) => (a.as_of < b.as_of ? 1 : -1));
-  return sorted[0] ?? null;
+  return sorted.find((r) => hasTrades(r)) ?? null;
 }
 
 export type TransparencyEntry = {
@@ -85,7 +88,7 @@ export async function getTransparencyEntry(
   const asOf = m[1];
   const all = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=365`);
   const r = all.find((x) => safeDate(x.as_of) === asOf) ?? null;
-  if (!r) return null;
+  if (!r || !hasTrades(r)) return null;
 
   return {
     slug,
@@ -106,8 +109,8 @@ export async function getTransparencyEntry(
 
 export async function getTransparencyAsOf(): Promise<string> {
   try {
-    const receipts = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=1`);
-    const r = pickLatestReceipt(receipts);
+    const receipts = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=60`);
+    const r = pickLatestReceiptWithTrades(receipts);
     return r?.as_of ?? "—";
   } catch {
     return "—";
@@ -118,8 +121,8 @@ export async function getTransparencySummaryForUI(): Promise<SnapshotCardData> {
   let r: ReceiptResp | null = null;
 
   try {
-    const receipts = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=1`);
-    r = pickLatestReceipt(receipts);
+    const receipts = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=60`);
+    r = pickLatestReceiptWithTrades(receipts);
   } catch {
     r = null;
   }
@@ -157,15 +160,16 @@ export const POLICY: readonly PolicyItem[] = [
 
 export async function getTransparencyEvents(): Promise<readonly TimelineEvent[]> {
   try {
-    const events = await apiGet<any[]>(`${API_HISTORY}/events?limit=60`);
-    if (!Array.isArray(events)) return [];
-    return events
-      .map((e) => ({
-        date: safeDate(e?.date),
-        title: String(e?.title ?? "Trades (derived)"),
-        detail: String(e?.detail ?? ""),
-        href: String(e?.href ?? ""),
-        tag: (e?.tag ?? "trades") as TransparencyTag,
+    const receipts = await apiGet<ReceiptResp[]>(`${API_HISTORY}/receipts?limit=60`);
+    if (!Array.isArray(receipts)) return [];
+    return receipts
+      .filter((r) => hasTrades(r))
+      .map((r) => ({
+        date: safeDate(r.as_of),
+        title: "Trades (derived)",
+        detail: JSON.stringify(r),
+        href: `/transparency/receipt-${safeDate(r.as_of)}`,
+        tag: "trades" as TransparencyTag,
       }))
       .filter((e) => e.date !== "—");
   } catch {

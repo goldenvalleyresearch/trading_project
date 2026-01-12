@@ -2,6 +2,14 @@ import styles from "./page.module.css";
 
 type KPI = { label: string; value: string };
 
+function withSign(v: string) {
+  if (!v || v === "—") return v;
+  if (/^\s*[+-]/.test(v)) return v;
+  const hasPositive = /(\d+(\.\d+)?)/.test(v) && !/-\d/.test(v);
+  if (!hasPositive) return v;
+  return `+${v}`.replace(/\((\d)/, "(+$1");
+}
+
 export default function SnapshotCard({
   title = "Latest snapshot",
   badge = "as-of",
@@ -25,16 +33,22 @@ export default function SnapshotCard({
       </div>
 
       <div className={styles.kpiRow}>
-        {kpis.map((k) => (
-          <div key={k.label} className={styles.kpi}>
-            <div className={styles.kpiLabel}>{k.label}</div>
-            <div className={styles.kpiValue}>{k.value}</div>
-          </div>
-        ))}
+        {kpis.map((k) => {
+          const showSigned =
+            k.label.toLowerCase().includes("change") || k.value.includes("%");
+          return (
+            <div key={k.label} className={styles.kpi}>
+              <div className={styles.kpiLabel}>{k.label}</div>
+              <div className={styles.kpiValue}>
+                {showSigned ? withSign(k.value) : k.value}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className={styles.bottom}>
-        <div className={styles.note}></div>
+        <div className={styles.note}>{note}</div>
         <a className={styles.cta} href={href}>
           {ctaLabel} →
         </a>

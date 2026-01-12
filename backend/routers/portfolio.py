@@ -308,18 +308,28 @@ def _compute_dashboard_from_positions(
     todays_pnl_total: float,
 ) -> dict:
     non_cash_positions_value = 0.0
+    cash_from_positions = 0.0
+
     for p in positions:
         t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-        if not t or _is_cash_like_ticker(t):
+        if not t:
             continue
-        non_cash_positions_value += _coerce_float(p.get("market_value", 0.0), 0.0)
 
-    total_value = non_cash_positions_value + float(cash_spaxx) + float(pending_amount)
+        mv = _coerce_float(p.get("market_value", 0.0), 0.0)
+
+        if _is_cash_like_ticker(t):
+            cash_from_positions += mv
+            continue
+
+        non_cash_positions_value += mv
+
+    cash_total = float(cash_spaxx) + float(cash_from_positions)
+    total_value = non_cash_positions_value + cash_total + float(pending_amount)
 
     return {
         "snapshot_as_of": as_of,
         "total_value": float(total_value),
-        "cash_spaxx": float(cash_spaxx),
+        "cash_spaxx": float(cash_total),
         "pending_amount": float(pending_amount),
         "non_cash_positions_value": float(non_cash_positions_value),
         "todays_pnl_total": float(todays_pnl_total),

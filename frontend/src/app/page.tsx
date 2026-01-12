@@ -82,7 +82,7 @@ export default function Home() {
 
             <div className={styles.snapshotWrap}>
               <SnapshotCard
-                note={snapshot.note}
+                note={""}
                 href={snapshot.href}
                 kpis={snapshot.kpis}
                 ctaLabel={snapshot.ctaLabel}

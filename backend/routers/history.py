@@ -67,9 +67,16 @@ def _round_price(x: Optional[float]) -> Optional[float]:
     return round(float(x), 4)
 
 
+def _positions_list(doc: dict[str, Any]) -> list:
+    arr = doc.get("positions")
+    if isinstance(arr, list):
+        return arr
+    arr = doc.get("data")
+    return arr if isinstance(arr, list) else []
+
 def _pos_map(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for p in (doc.get("positions") or []):
+    for p in _positions_list(doc):
         if not isinstance(p, dict):
             continue
         t = p.get("ticker") or p.get("symbol")
@@ -78,17 +85,19 @@ def _pos_map(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
         out[str(t).upper()] = p
     return out
 
-
 def compute_non_cash_value(positions: list[dict[str, Any]]) -> float:
     total = 0.0
     for p in positions:
+        t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
+        if not t or _is_cash_like_ticker(t):
+            continue
+
         mv = p.get("market_value")
         if mv is None:
             mv = p.get("value")
         if isinstance(mv, (int, float)):
             total += float(mv)
     return total
-
 
 def _net_value(doc: Optional[dict[str, Any]]) -> Optional[float]:
     if not doc:
@@ -226,19 +235,19 @@ async def history_receipts(limit: int = Query(30, ge=1, le=365)):
                 )
             )
 
-        receipts.append(
-            ReceiptResp(
-                as_of=as_of,
-                receipt_id=f"rcpt-{as_of}",
-                net_after=float(net_after or 0.0),
-                net_before=float(net_before) if net_before is not None else None,
-                delta=_round_money(delta) if delta is not None else None,
-                trades=trades,
+        if trades or (delta is not None and abs(delta) > 1e-6):
+            receipts.append(
+                ReceiptResp(
+                    as_of=as_of,
+                    receipt_id=f"rcpt-{as_of}",
+                    net_after=float(net_after or 0.0),
+                    net_before=float(net_before) if net_before is not None else None,
+                    delta=_round_money(delta) if delta is not None else None,
+                    trades=trades,
+                )
             )
-        )
 
     return receipts
-
 
 @router.get("/events")
 async def history_events(limit: int = Query(30, ge=1, le=365)):
