@@ -6,6 +6,7 @@ import requests
 import secrets
 from datetime import datetime, timezone
 from typing import Literal, Optional, List, Dict, Any, Tuple
+import os
 
 from fastapi import APIRouter, HTTPException, Request, Query
 from pydantic import BaseModel, Field
@@ -58,7 +59,6 @@ def _requests_post_json(
         text_preview = (r.text or "")[:600]
         try:
             data = r.json()
-            print(data)
         except Exception:
             data = {}
         return status, data, text_preview
@@ -66,13 +66,22 @@ def _requests_post_json(
         return 599, {}, f"{type(e).__name__}: {e}"
 
 
+def _api_prefix() -> str:
+    p = (os.getenv("PUBLIC_API_PREFIX") or "/api").strip()
+    if p in ("", "/"):
+        return ""
+    return "/" + p.strip("/")
+
+
 def _api_base_url() -> str:
-    return (getattr(settings, "PUBLIC_API_URL", None) or "http://localhost:8000").rstrip("/")
+    base = (os.getenv("PUBLIC_BACKEND_URL") or os.getenv("BACKEND_URL") or "").strip()
+    if not base:
+        return "http://localhost:8000"
+    return base.rstrip("/")
 
 
 def _make_unsub_link(token: str) -> str:
-    return f"{_api_base_url()}/api/newsletter/unsubscribe?token={token}"
-
+    return f"{_api_base_url()}{_api_prefix()}/newsletter/unsubscribe?token={token}"
 
 def _ensure_unsub_token(doc: dict) -> str:
     t = doc.get("unsubscribe_token")
@@ -314,10 +323,15 @@ async def list_sends_public(
     col = db["newsletter_sends"]
 
     term = (q or "").strip()
+
+    base_filters: List[Dict[str, Any]] = [
+        {"sent": {"$gt": 0}},
+        {"mode": {"$ne": "test"}},
+    ]
+
     if term:
         query: Dict[str, Any] = {
-            "$and": [
-                {"sent": {"$gt": 0}},
+            "$and": base_filters + [
                 {
                     "$or": [
                         {"subject": {"$regex": re.escape(term), "$options": "i"}},
@@ -325,11 +339,11 @@ async def list_sends_public(
                         {"text": {"$regex": re.escape(term), "$options": "i"}},
                         {"html": {"$regex": re.escape(term), "$options": "i"}},
                     ]
-                },
+                }
             ]
         }
     else:
-        query = {"sent": {"$gt": 0}}
+        query = {"$and": base_filters}
 
     cur = col.find(query).sort("created_at", -1).limit(limit)
     docs = await cur.to_list(length=limit)

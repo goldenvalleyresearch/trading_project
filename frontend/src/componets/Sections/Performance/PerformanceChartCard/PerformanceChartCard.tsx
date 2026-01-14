@@ -6,8 +6,8 @@ import EquityPreview from "@/componets/UI/EquityPreview/EquityPreview";
 import { apiGet } from "@/lib/api";
 
 type EquityPoint = { d: string; v: number };
-type RangeKey = "1D" | "5D" | "1M" | "6M" | "1Y" | "ALL";
-type BenchRange = "1M" | "3M" | "1Y" | "ALL";
+type RangeKey = "5D" | "1M" | "6M" | "1Y" | "ALL";
+type BenchRange = "1M" | "1Y" | "ALL";
 
 function pctStr(x: number | null | undefined): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return "—";
@@ -105,7 +105,7 @@ function computeVsSPY(port: EquityPoint[], spy: EquityPoint[]): number | null {
 }
 
 function apiRange(r: RangeKey): BenchRange {
-  if (r === "1D" || r === "5D" || r === "1M") return "1M";
+  if (r === "5D" || r === "1M") return "1M";
   if (r === "6M" || r === "1Y") return "1Y";
   return "ALL";
 }
@@ -128,9 +128,11 @@ export default function PerformanceChartCard() {
           .filter((p) => p.d.length === 10 && Number.isFinite(p.v))
       : [];
 
-    const lastD = cleaned.length ? cleaned[cleaned.length - 1].d : "—";
-    const key = `${cleaned.length}:${lastD}`;
+    const last = cleaned.length ? cleaned[cleaned.length - 1] : null;
+    const lastD = last ? last.d : "—";
+    const lastV = last ? last.v : NaN;
 
+    const key = `${cleaned.length}:${lastD}:${Number.isFinite(lastV) ? lastV.toFixed(6) : "x"}`;
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
 
@@ -139,19 +141,30 @@ export default function PerformanceChartCard() {
   }, []);
 
   useEffect(() => {
-    const maxAgeSec = 3600;
-    (async () => {
+    let alive = true;
+    const pollMs = range === "5D" ? 15000 : 60000;
+
+    const tick = async () => {
       try {
         setSpyErr(null);
         const j: any = await apiGet(
-          `/api/benchmark/price-series?symbol=SPY&range=${encodeURIComponent(apiRange(range))}&max_age_sec=${maxAgeSec}`
+          `/api/benchmark/price-series?symbol=SPY&range=${encodeURIComponent(apiRange(range))}&max_age_sec=60`
         );
+        if (!alive) return;
         setSpyPoints(normalizeCloseSeries(j));
       } catch (e: any) {
+        if (!alive) return;
         setSpyErr(e?.message ?? "Benchmark failed");
         setSpyPoints([]);
       }
-    })();
+    };
+
+    tick();
+    const t = window.setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
   }, [range]);
 
   const cagr = useMemo(() => computeCAGR(points), [points]);
@@ -163,7 +176,7 @@ export default function PerformanceChartCard() {
     return computeVsSPY(points, spyPoints);
   }, [points, spyPoints, spyErr]);
 
-  const ranges: RangeKey[] = ["1D", "5D", "1M", "6M", "1Y", "ALL"];
+  const ranges: RangeKey[] = ["5D", "1M", "6M", "1Y", "ALL"];
 
   return (
     <section className={styles.chartCard}>

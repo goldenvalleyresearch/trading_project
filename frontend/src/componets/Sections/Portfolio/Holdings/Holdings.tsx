@@ -29,9 +29,22 @@ function parseMoneyLike(x: any): number {
 
 function fmtPriceUpdated(s: any) {
   if (!s) return "—";
-  const d = new Date(String(s));
-  if (Number.isNaN(d.getTime())) return String(s).slice(0, 19).replace("T", " ");
-  return d.toLocaleString(undefined, {
+
+  const raw = String(s).trim();
+  if (!raw) return "—";
+
+  let d: Date;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    d = new Date(raw + "T12:00:00");
+  } else {
+    d = new Date(raw);
+  }
+
+  if (!Number.isFinite(d.getTime())) return raw.slice(0, 19).replace("T", " ");
+
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
     month: "short",
     day: "2-digit",
     hour: "2-digit",

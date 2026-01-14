@@ -103,6 +103,9 @@ def _positions_list(doc: dict) -> list:
     arr = doc.get("data")
     return arr if isinstance(arr, list) else []
 
+def _is_weekday_utc(d: datetime) -> bool:
+    return d.weekday() < 5
+
 
 def _is_cash_like_ticker(t: str) -> bool:
     t = (t or "").upper().strip()
@@ -175,8 +178,8 @@ async def _get_any_price(ticker: str, api_key: str) -> Optional[float]:
 
 async def _latest_prices_timestamp() -> Optional[datetime]:
     db = get_db()
-    col = db["prices_latest"]
-    doc = await col.find_one({}, sort=[("as_of", -1)], projection={"_id": 0, "as_of": 1})
+    meta = db["prices_meta"]
+    doc = await meta.find_one({"_id": "latest"}, projection={"_id": 0, "as_of": 1})
     return _as_aware_utc(doc.get("as_of") if doc else None)
 
 
@@ -197,7 +200,6 @@ async def ensure_prices_fresh(
     limit: int = 2000,
     force: bool = False,
 ) -> dict:
-
     api_key = os.getenv("POLYGON_API_KEY")
     if not api_key:
         return {"refreshed": False, "reason": "Missing POLYGON_API_KEY"}
@@ -212,10 +214,43 @@ async def ensure_prices_fresh(
     if not force and latest_ts is not None:
         age_sec = (now - latest_ts).total_seconds()
         if age_sec <= max_age_sec:
-            return {"refreshed": False, "reason": "Fresh enough", "age_sec": int(age_sec), "total": len(tickers)}
+            return {
+                "refreshed": False,
+                "reason": "Fresh enough",
+                "age_sec": int(age_sec),
+                "total": len(tickers),
+                "as_of": latest_ts,
+            }
 
     db = get_db()
-    col = db["prices_latest"]
+    prices_col = db["prices_latest"]
+    meta_col = db["prices_meta"]
+
+    existing = await prices_col.find(
+        {"ticker": {"$in": tickers}},
+        {"_id": 0, "ticker": 1, "as_of": 1},
+    ).to_list(length=len(tickers) + 10)
+
+    by_ticker: dict[str, Optional[datetime]] = {}
+    for r in existing:
+        t = str(r.get("ticker") or "").upper().strip()
+        if not t:
+            continue
+        by_ticker[t] = _as_aware_utc(r.get("as_of"))
+
+    need: list[str] = []
+    for t in tickers:
+        ts = by_ticker.get(t)
+        if force or ts is None or (now - ts).total_seconds() > max_age_sec:
+            need.append(t)
+
+    if not need:
+        await meta_col.update_one(
+            {"_id": "latest"},
+            {"$set": {"as_of": now}},
+            upsert=True,
+        )
+        return {"refreshed": False, "reason": "All tickers fresh", "total": len(tickers), "as_of": now}
 
     updated = 0
     missing: list[str] = []
@@ -237,7 +272,7 @@ async def ensure_prices_fresh(
                 return
 
             now2 = utcnow()
-            await col.update_one(
+            await prices_col.update_one(
                 {"ticker": t},
                 {
                     "$set": {"ticker": t, "price": float(price), "as_of": now2, "source": "polygon"},
@@ -247,18 +282,24 @@ async def ensure_prices_fresh(
             )
             updated += 1
 
-    await asyncio.gather(*(fetch_one(t) for t in tickers))
+    await asyncio.gather(*(fetch_one(t) for t in need))
+
+    await meta_col.update_one(
+        {"_id": "latest"},
+        {"$set": {"as_of": now}},
+        upsert=True,
+    )
 
     return {
         "refreshed": True,
         "force": bool(force),
         "total": len(tickers),
+        "attempted": len(need),
         "updated": updated,
         "missing": missing[:50],
         "errors": errors[:50],
         "as_of": now,
     }
-    
 
 async def _prices_map() -> Dict[str, dict]:
     db = get_db()
@@ -297,6 +338,39 @@ def _apply_live_price(p: dict, live: dict) -> dict:
         out["unrealized_pl_pct"] = float(unreal / cost_value) if cost_value else 0.0
 
     return out
+
+
+def _compute_live_total_and_missing(doc: dict, prices: Dict[str, dict]) -> Tuple[float, List[str]]:
+    cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
+    pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
+
+    live_non_cash = 0.0
+    missing: list[str] = []
+
+    for p in _positions_list(doc):
+        if not isinstance(p, dict):
+            continue
+
+        t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
+        if not t or _is_cash_like_ticker(t):
+            continue
+
+        q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
+
+        live = prices.get(t)
+        if live is None or not isinstance(live.get("price"), (int, float)):
+            missing.append(t)
+            continue
+
+        px = _coerce_float(live.get("price"), 0.0)
+        if px <= 0:
+            missing.append(t)
+            continue
+
+        live_non_cash += q * px
+
+    return float(live_non_cash + cash_spaxx + pending_amount), missing
+
 
 
 def _compute_dashboard_from_positions(
@@ -520,58 +594,36 @@ async def legacy_equity_curve(
                 }
             )
 
-    # -------------------------
-    # MODE 1: equity (raw balance)
-    # -------------------------
     if mode == "equity":
         try:
             await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
         except Exception:
             pass
 
-        doc = await _latest_snapshot_doc()
-        prices = await _prices_map()
+        try:
+            doc = await _latest_snapshot_doc()
+            prices = await _prices_map()
 
-        cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
-        pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
+            now = utcnow()
+            if _is_weekday_utc(now):
+                live_total, missing = _compute_live_total_and_missing(doc, prices)
+                if not missing:
+                    live_date = now.date().isoformat()
+                    if daily and daily[-1]["date"] == live_date:
+                        daily[-1]["balance"] = live_total
+                        daily[-1]["net_flow"] = float(daily[-1].get("net_flow") or 0.0)
+                    else:
+                        daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
 
-        live_non_cash = 0.0
-        for p in _positions_list(doc):
-            if not isinstance(p, dict):
-                continue
-            t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-            if not t or _is_cash_like_ticker(t):
-                continue
-
-            q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
-            live = prices.get(t)
-            px = (
-                _coerce_float(live.get("price"), 0.0)
-                if live is not None
-                else _coerce_float(p.get("last_price") or p.get("price") or 0.0, 0.0)
-            )
-            live_non_cash += q * px
-
-        live_total = float(live_non_cash + cash_spaxx + pending_amount)
-
-        live_date = utcnow().date().isoformat()
-        if daily and daily[-1]["date"] == live_date:
-            daily[-1]["balance"] = live_total
-            daily[-1]["net_flow"] = float(daily[-1].get("net_flow") or 0.0)
-        else:
-            daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
-
-        if len(daily) > window:
-            daily = daily[-window:]
+                    if len(daily) > window:
+                        daily = daily[-window:]
+        except Exception:
+            pass
 
         series = [{"date": r["date"], "balance": float(r["balance"])} for r in daily]
         as_of = series[-1]["date"] if series else "—"
         return {"series": series, "count": len(series), "as_of": as_of, "mode": mode}
 
-    # -------------------------
-    # MODE 2: twr (performance only)
-    # ✅ NEW: append an intraday "live" point from Polygon (no contributions counted)
-    # -------------------------
     if mode == "twr":
         try:
             await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
@@ -582,45 +634,22 @@ async def legacy_equity_curve(
             doc = await _latest_snapshot_doc()
             prices = await _prices_map()
 
-            cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
-            pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
+            now = utcnow()
+            if _is_weekday_utc(now):
+                live_total, missing = _compute_live_total_and_missing(doc, prices)
+                if not missing:
+                    live_date = now.date().isoformat()
+                    if daily and daily[-1]["date"] == live_date:
+                        daily[-1]["balance"] = live_total
+                        daily[-1]["net_flow"] = 0.0
+                    else:
+                        daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
 
-            live_non_cash = 0.0
-            for p in _positions_list(doc):
-                if not isinstance(p, dict):
-                    continue
-                t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-                if not t or _is_cash_like_ticker(t):
-                    continue
-
-                q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
-                live = prices.get(t)
-                px = (
-                    _coerce_float(live.get("price"), 0.0)
-                    if live is not None
-                    else _coerce_float(p.get("last_price") or p.get("price") or 0.0, 0.0)
-                )
-                live_non_cash += q * px
-
-            live_total = float(live_non_cash + cash_spaxx + pending_amount)
-            live_date = utcnow().date().isoformat()
-
-            if daily and daily[-1]["date"] == live_date:
-                daily[-1]["balance"] = live_total
-                # IMPORTANT: make "live" update not count as a deposit/withdrawal
-                daily[-1]["net_flow"] = 0.0
-            else:
-                daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
-
-            if len(daily) > window:
-                daily = daily[-window:]
+                    if len(daily) > window:
+                        daily = daily[-window:]
         except Exception:
-            # don't break TWR if Polygon/mongo fails
             pass
 
-    # -------------------------
-    # TWR math (unchanged)
-    # -------------------------
     if len(daily) < 1:
         return {"series": [], "count": 0, "as_of": "—", "mode": mode}
 
@@ -645,7 +674,6 @@ async def legacy_equity_curve(
         cur_bal = float(r["balance"])
         flow = float(r.get("net_flow") or 0.0)
 
-        # TWR daily return excluding contributions
         ret = (cur_bal - flow - prev) / prev if prev else 0.0
         if ret < -0.99:
             ret = -0.99

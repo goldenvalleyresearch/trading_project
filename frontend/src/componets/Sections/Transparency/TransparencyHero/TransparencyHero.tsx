@@ -32,9 +32,10 @@ type ReceiptResp = {
 };
 
 function fmtDate(d?: string | null) {
-  if (!d) return "—";
-  const t = String(d).slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : String(d);
+  const raw = (d ?? "").toString().trim();
+  if (!raw) return null;
+  const t = raw.slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : raw;
 }
 
 function money(x: any) {
@@ -89,14 +90,14 @@ export default function TransparencyHero({
   }, []);
 
   const right = useMemo(() => {
-    const date = fmtDate(recent?.as_of) || asOf;
-    const trades = recent?.trades ?? null;
-    const events = recent?.events ?? trades;
-    const netAfter = recent?.net_after ?? null;
-    const delta = recent?.delta ?? null;
+  const date = fmtDate(recent?.as_of) ?? fmtDate(asOf) ?? "—";
+  const trades = recent?.trades ?? null;
+  const events = recent?.events ?? trades;
+  const netAfter = recent?.net_after ?? null;
+  const delta = recent?.delta ?? null;
 
-    return { date, events, trades, netAfter, delta };
-  }, [recent, asOf]);
+  return { date, events, trades, netAfter, delta };
+}, [recent, asOf]);
 
   return (
     <section className={styles.hero}>

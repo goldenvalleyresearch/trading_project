@@ -2,28 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  Tooltip,
-  CartesianGrid,
-  YAxis,
-} from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis, Tooltip, CartesianGrid, YAxis } from "recharts";
 import { apiGet } from "@/lib/api";
 
-type RangeKey = "1D" | "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
+type RangeKey = "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
 
 type Props = {
   height?: number;
   showControls?: boolean;
-
   range?: RangeKey;
   onRangeChange?: (r: RangeKey) => void;
-
   onData?: (points: Point[]) => void;
-
   showSpy?: boolean;
   spySymbol?: string;
   rebaseTo100?: boolean;
@@ -31,41 +20,40 @@ type Props = {
 
 type Point = { d: string; v: number };
 type ChartRow = { d: string; p: number | null; b: number | null };
+type ChartRowT = { d: string; t: number; p: number | null; b: number | null };
 
-const parseISO = (d: string) => new Date(String(d).slice(0, 10) + "T00:00:00Z");
+const TZ = "America/Chicago";
 
-function apiRangeForBenchmark(range: RangeKey): "1M" | "3M" | "1Y" | "ALL" {
-  if (range === "1D" || range === "5D" || range === "1M") return "1M";
+function parseDayToUtcMs(d: string) {
+  const day = String(d).slice(0, 10);
+  return Date.parse(day + "T12:00:00Z");
+}
+
+function apiRangeForBenchmark(range: RangeKey): "1M" | "3M" | "1Y" | "5Y" {
+  if (range === "5D" || range === "1M") return "1M";
   if (range === "3M") return "3M";
   if (range === "6M" || range === "1Y") return "1Y";
-  return "ALL";
+  return "5Y";
 }
 
 function desiredPoints(range: RangeKey) {
-  if (range === "1D") return 2;
   if (range === "5D") return 6;
   if (range === "1M") return 22;
   if (range === "3M") return 63;
   if (range === "6M") return 126;
   if (range === "1Y") return 252;
-  return 10000;
+  return 252 * 5;
 }
 
 function fetchWindow(range: RangeKey) {
   const need = desiredPoints(range);
-  return Math.min(10000, need + 220);
+  return Math.min(5000, need + 600);
 }
 
 function normalizeEquity(input: unknown): Point[] {
   const root = input as any;
   const arr: any[] =
-    Array.isArray(root)
-      ? root
-      : Array.isArray(root?.series)
-      ? root.series
-      : Array.isArray(root?.data)
-      ? root.data
-      : [];
+    Array.isArray(root) ? root : Array.isArray(root?.series) ? root.series : Array.isArray(root?.data) ? root.data : [];
 
   return arr
     .map((p) => ({
@@ -78,13 +66,7 @@ function normalizeEquity(input: unknown): Point[] {
 function normalizeSeriesClose(input: unknown): Point[] {
   const root = input as any;
   const arr: any[] =
-    Array.isArray(root)
-      ? root
-      : Array.isArray(root?.series)
-      ? root.series
-      : Array.isArray(root?.data)
-      ? root.data
-      : [];
+    Array.isArray(root) ? root : Array.isArray(root?.series) ? root.series : Array.isArray(root?.data) ? root.data : [];
 
   return arr
     .map((p) => ({
@@ -95,41 +77,37 @@ function normalizeSeriesClose(input: unknown): Point[] {
 }
 
 function sortByDate(points: Point[]) {
-  return [...points].sort((a, b) => parseISO(a.d).getTime() - parseISO(b.d).getTime());
+  return [...points].sort((a, b) => parseDayToUtcMs(a.d) - parseDayToUtcMs(b.d));
 }
 
 function uniqByDayKeepLast(points: Point[]) {
   const m = new Map<string, number>();
   for (const p of points) m.set(p.d.slice(0, 10), p.v);
-  const days = Array.from(m.keys()).sort((a, b) => parseISO(a).getTime() - parseISO(b).getTime());
+  const days = Array.from(m.keys()).sort((a, b) => parseDayToUtcMs(a) - parseDayToUtcMs(b));
   return days.map((d) => ({ d, v: m.get(d)! }));
 }
 
-function buildTimelineFromBenchmarkDates(port: Point[], bench: Point[]) {
+function buildTimelineUnionDates(port: Point[], bench: Point[]) {
   const pMap = new Map(port.map((x) => [x.d.slice(0, 10), x.v]));
   const bMap = new Map(bench.map((x) => [x.d.slice(0, 10), x.v]));
 
-  const dates = bench.length
-    ? bench.map((x) => x.d.slice(0, 10))
-    : Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
-        (a, c) => parseISO(a).getTime() - parseISO(c).getTime()
-      );
+  const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
+    (a, c) => parseDayToUtcMs(a) - parseDayToUtcMs(c)
+  );
 
-  let started = false;
+  let startedP = false;
   let lastP: number | null = null;
 
   return dates.map<ChartRow>((d) => {
     const rawP = pMap.has(d) ? (pMap.get(d) as number) : null;
-    const b = bMap.has(d) ? (bMap.get(d) as number) : null;
+    const rawB = bMap.has(d) ? (bMap.get(d) as number) : null;
 
     if (rawP != null) {
-      started = true;
+      startedP = true;
       lastP = rawP;
     }
 
-    const p = started ? lastP : null;
-
-    return { d, p, b };
+    return { d, p: startedP ? lastP : null, b: rawB };
   });
 }
 
@@ -149,25 +127,26 @@ function rebaseBothTo100(rows: ChartRow[]) {
 }
 
 function makeTickFormatter(range: RangeKey) {
-  return (label: string) => {
-    const dt = parseISO(label);
-    if (!Number.isFinite(dt.getTime())) return String(label);
+  return (ms: number) => {
+    const dt = new Date(ms);
+    if (!Number.isFinite(dt.getTime())) return "";
 
-    if (range === "1D")
-      return dt.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
-    if (range === "5D")
-      return dt.toLocaleDateString(undefined, { weekday: "short" });
-    if (range === "1M" || range === "3M")
-      return dt.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+    if (range === "5D") {
+      return dt.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short", month: "short", day: "2-digit" });
+    }
 
-    return dt.toLocaleDateString(undefined, { month: "short" });
+    if (range === "1M" || range === "3M" || range === "6M") {
+      return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
+    }
+
+    return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", year: "numeric" });
   };
 }
 
-function tooltipLabel(label: string) {
-  const dt = parseISO(label);
-  if (!Number.isFinite(dt.getTime())) return String(label);
-  return dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" });
+function tooltipLabelFromMs(ms: number) {
+  const dt = new Date(ms);
+  if (!Number.isFinite(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, { timeZone: TZ, year: "numeric", month: "short", day: "2-digit" });
 }
 
 const fmtUSD = (n: number) =>
@@ -177,12 +156,10 @@ const fmtPctFrom100 = (n: number) => (Number.isFinite(n) ? `${(n - 100).toFixed(
 
 function intervalFor(range: RangeKey, len: number) {
   if (len <= 2) return 0;
+  if (range === "5D") return 0;
+
   const target =
-    range === "1D"
-      ? 2
-      : range === "5D"
-      ? 6
-      : range === "1M"
+    range === "1M"
       ? 10
       : range === "3M"
       ? 10
@@ -190,10 +167,9 @@ function intervalFor(range: RangeKey, len: number) {
       ? 7
       : range === "1Y"
       ? 12
-      : 10;
+      : 16;
 
-  const skip = Math.max(0, Math.ceil(len / target) - 1);
-  return skip;
+  return Math.max(0, Math.ceil(len / target) - 1);
 }
 
 export default function EquityPreview({
@@ -224,25 +200,34 @@ export default function EquityPreview({
   const lastSentRef = useRef<string>("");
 
   useEffect(() => {
-    const controller = new AbortController();
-    const window = fetchWindow(range);
+    let alive = true;
+    const pollMs = range === "5D" ? 15000 : 60000;
 
-    (async () => {
+    const tick = async () => {
       try {
         setLoading(true);
         setErr(null);
-        const json = await apiGet<unknown>(`/api/portfolio/equity-curve?window=${window}&mode=twr`);
+        const windowN = fetchWindow(range);
+        const json = await apiGet<unknown>(
+          `/api/portfolio/equity-curve?window=${encodeURIComponent(String(windowN))}&mode=twr&max_age_sec=60`
+        );
+        if (!alive) return;
         setEquityRemote(json);
       } catch (e: any) {
-        if (controller.signal.aborted) return;
+        if (!alive) return;
         setErr(e?.message ?? "Failed to load equity");
         setEquityRemote(null);
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (alive) setLoading(false);
       }
-    })();
+    };
 
-    return () => controller.abort();
+    tick();
+    const t = window.setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
   }, [range]);
 
   useEffect(() => {
@@ -252,51 +237,69 @@ export default function EquityPreview({
       return;
     }
 
-    const controller = new AbortController();
+    let alive = true;
+    const pollMs = range === "5D" ? 15000 : 60000;
 
-    (async () => {
+    const tick = async () => {
       try {
         setBenchErr(null);
         const sym = (spySymbol || "SPY").trim().toUpperCase();
         const apiRange = apiRangeForBenchmark(range);
         const json = await apiGet<unknown>(
-          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(apiRange)}`
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(apiRange)}&max_age_sec=60`
         );
+        if (!alive) return;
         setBenchRemote(json);
       } catch (e: any) {
-        if (controller.signal.aborted) return;
+        if (!alive) return;
         setBenchErr(e?.message ?? "Failed to load benchmark");
         setBenchRemote(null);
       }
-    })();
+    };
 
-    return () => controller.abort();
+    tick();
+    const t = window.setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
   }, [range, showSpy, spySymbol]);
 
-  const chartData = useMemo(() => {
-    const need = desiredPoints(range);
+  const eqPoints = useMemo(() => uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote))), [equityRemote]);
 
-    const eq = uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote)));
+  const chartData = useMemo<ChartRowT[]>(() => {
+    const eq = eqPoints;
     const bench = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(benchRemote)));
 
     if (eq.length === 0) return [];
 
-    const timeline = buildTimelineFromBenchmarkDates(eq, showSpy && !benchErr ? bench : []);
+    const timeline = buildTimelineUnionDates(eq, showSpy && !benchErr ? bench : []);
+
+    const need = Math.min(timeline.length, desiredPoints(range));
     const sliced = timeline.length > need ? timeline.slice(timeline.length - need) : timeline;
 
     if (sliced.length < 2) return [];
-    return rebaseTo100 && showSpy && !benchErr && bench.length ? rebaseBothTo100(sliced) : sliced;
-  }, [equityRemote, benchRemote, range, rebaseTo100, showSpy, benchErr]);
+
+    const hasOverlap = sliced.some((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
+    const rebased = rebaseTo100 && showSpy && !benchErr && bench.length && hasOverlap ? rebaseBothTo100(sliced) : sliced;
+
+    return rebased
+      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b }))
+      .filter((r) => Number.isFinite(r.t))
+      .sort((a, b) => a.t - b.t);
+  }, [eqPoints, benchRemote, range, rebaseTo100, showSpy, benchErr]);
 
   useEffect(() => {
     if (!onData) return;
-    const eq = uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote)));
-    const lastD = eq.length ? eq[eq.length - 1].d : "";
-    const key = `${eq.length}:${lastD}`;
+
+    const last = eqPoints.length ? eqPoints[eqPoints.length - 1] : null;
+    const key = `${eqPoints.length}:${last?.d ?? ""}:${last && Number.isFinite(last.v) ? last.v.toFixed(6) : "x"}`;
+
     if (lastSentRef.current === key) return;
     lastSentRef.current = key;
-    onData(eq);
-  }, [equityRemote, onData]);
+
+    onData(eqPoints);
+  }, [eqPoints, onData]);
 
   const tickFormatter = useMemo(() => makeTickFormatter(range), [range]);
   const xInterval = useMemo(() => intervalFor(range, chartData.length), [range, chartData.length]);
@@ -316,9 +319,9 @@ export default function EquityPreview({
     <div>
       {showControls && (
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          {(["1D", "5D", "1M", "3M", "6M", "1Y", "ALL"] as RangeKey[]).map((r) => (
+          {(["5D", "1M", "3M", "6M", "1Y", "ALL"] as RangeKey[]).map((r) => (
             <button key={r} type="button" onClick={() => setRange(r)} style={btn(range === r)}>
-              {r}
+              {r === "ALL" ? "5Y" : r}
             </button>
           ))}
           {showSpy && (
@@ -330,25 +333,32 @@ export default function EquityPreview({
       )}
 
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={chartData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+        <LineChart data={chartData} margin={{ top: 10, right: 18, left: 6, bottom: 18 }}>
           <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
           <YAxis hide domain={["auto", "auto"]} />
           <XAxis
-            dataKey="d"
+            type="number"
+            scale="time"
+            dataKey="t"
             axisLine={false}
             tickLine={false}
             interval={xInterval as any}
             minTickGap={12}
             tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-            tickFormatter={tickFormatter}
+            tickFormatter={tickFormatter as any}
+            domain={["dataMin", "dataMax"]}
+            padding={{ left: 6, right: 10 }}
+            allowDataOverflow
+            tickMargin={10}
+            height={24}
           />
 
           <Tooltip
-            labelFormatter={(label) => tooltipLabel(String(label))}
+            labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
             formatter={(value, name) => {
               const n = Number(value);
-              const label = name === "p" ? "Portfolio" : "S&P 500";
-              return [tooltipFmt(n), label];
+              const labelName = name === "p" ? "Portfolio" : "S&P 500";
+              return [tooltipFmt(n), labelName];
             }}
             contentStyle={{
               background: "rgba(10,12,18,0.92)",
@@ -359,26 +369,10 @@ export default function EquityPreview({
             labelStyle={{ color: "rgba(255,255,255,0.65)" }}
           />
 
-          <Line
-            type="monotone"
-            dataKey="p"
-            stroke="rgba(110,160,255,0.9)"
-            strokeWidth={2.5}
-            dot={false}
-            isAnimationActive={false}
-            connectNulls
-          />
+          <Line type="monotone" dataKey="p" stroke="rgba(110,160,255,0.9)" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls />
 
           {showSpy && !benchErr && (
-            <Line
-              type="monotone"
-              dataKey="b"
-              stroke="rgba(255,255,255,0.35)"
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive={false}
-              connectNulls
-            />
+            <Line type="monotone" dataKey="b" stroke="rgba(255,255,255,0.35)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
           )}
         </LineChart>
       </ResponsiveContainer>

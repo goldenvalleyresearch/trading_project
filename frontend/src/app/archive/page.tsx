@@ -31,6 +31,17 @@ function stripHtml(html: string) {
     .trim();
 }
 
+function sanitizeEmailHtml(html: string) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[\s\S]*?>[\s\S]*?<\/embed>/gi, "")
+    .replace(/<form[\s\S]*?>[\s\S]*?<\/form>/gi, "")
+    .replace(/<meta[^>]*http-equiv=["']?refresh["']?[^>]*>/gi, "")
+    .replace(/<link[^>]+rel=["']?(preload|prefetch|dns-prefetch|preconnect)["']?[^>]*>/gi, "");
+}
+
 function wrapDoc(html: string) {
   return `<!doctype html>
 <html>
@@ -39,9 +50,28 @@ function wrapDoc(html: string) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <base target="_blank">
 <style>
-  body{margin:0;padding:18px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+  :root{
+    color-scheme: dark;
+  }
+  html,body{height:100%}
+  body{
+    margin:0;
+    padding:20px;
+    background: transparent;
+    color: rgba(255,255,255,0.92);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    line-height: 1.55;
+  }
+
+  /* Make email content behave inside your card */
   img{max-width:100%;height:auto}
-  a{color:#2563eb}
+  table{max-width:100%}
+  pre,code{white-space:pre-wrap;word-break:break-word}
+  a{color:#7aa8ff}
+
+  /* Optional: if the email has no styling, give it a nice default */
+  h1,h2,h3{margin:0.6em 0 0.35em; line-height:1.15}
+  p{margin:0.65em 0}
 </style>
 </head>
 <body>${html}</body>
@@ -103,6 +133,10 @@ export default function NewsletterArchivePage() {
       return subj.includes(term) || mode.includes(term) || body.includes(term);
     });
   }, [items, q]);
+
+  const htmlCandidate =
+  (selected?.html && selected.html.trim()) ||
+  (selected?.text && /<\/?[a-z][\s\S]*>/i.test(selected.text) ? selected.text.trim() : "");
 
   useEffect(() => {
     if (!selected && filtered.length) setSelected(filtered[0]);
@@ -219,18 +253,21 @@ export default function NewsletterArchivePage() {
                 </div>
 
                 <div className={styles.paper}>
-                  {selectedHtml ? (
-                    <div className={styles.htmlWrap}>
-                      <iframe
-                        title="newsletter"
-                        className={styles.iframe}
-                        sandbox="allow-same-origin"
-                        srcDoc={wrapDoc(selectedHtml)}
-                      />
-                    </div>
-                  ) : (
-                    <div className={styles.text}>{selectedText || "No HTML/text content."}</div>
-                  )}
+
+            {htmlCandidate ? (
+              <div className={styles.htmlWrap}>
+                <iframe
+                  title="newsletter"
+                  className={styles.iframe}
+                  sandbox="allow-same-origin allow-popups allow-forms"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  srcDoc={wrapDoc(sanitizeEmailHtml(htmlCandidate))}
+                />
+              </div>
+            ) : (
+              <div className={styles.text}>{selectedText || "No HTML/text content."}</div>
+            )}
                 </div>
               </section>
             </div>

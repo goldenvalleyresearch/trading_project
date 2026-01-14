@@ -59,12 +59,15 @@ JWT_SECRET=dev-super-secret-change-me-please-1234567890
 JWT_ALG=HS256
 
 ACCESS_TOKEN_TTL_MIN=60
+
 REFRESH_TOKEN_TTL_DAYS=14
 
 ACCESS_COOKIE_NAME=access_token
+
 REFRESH_COOKIE_NAME=refresh_token
 
 COOKIE_SECURE=false
+
 COOKIE_SAMESITE=lax
 
 BCRYPT_ROUNDS=12
@@ -74,6 +77,8 @@ BREVO_API_KEY=
 BREVO_FROM_EMAIL=
 
 PUBLIC_APP_URL = (site domain)
+
+BACKEND_URL = http://localhost:8000
 
 
 ---
