@@ -8,6 +8,7 @@ import Header from "../../componets/UI/Header_bar/Header_bar";
 import Footer from "../../componets/UI/Footer/Footer";
 import UploadCard from "@/componets/Sections/Upload/UploadCard/UploadCard";
 import NewsletterCard from "@/componets/Sections/Upload/NewsletterCard/NewsletterCard";
+import AdminPasswordCard from "@/componets/Sections/Upload/AdminPasswordCard/AdminPasswordCard";
 
 import { BRAND_NAME, LINKS } from "../../lib/site";
 import { apiGet, apiPost } from "../../lib/api";
@@ -440,6 +441,21 @@ export default function UploadPage() {
           </div>
         </div>
       </main>
+
+      <div className={styles.newsletterFull}>
+        <AdminPasswordCard
+          busy={!!busy}
+          onSuccess={(msg) => {
+            setOk(msg);
+            setErr(null);
+          }}
+          onError={(msg) => {
+            setErr(msg);
+            setOk(null);
+          }}
+        />
+      </div>
+
 
       <Footer />
     </div>

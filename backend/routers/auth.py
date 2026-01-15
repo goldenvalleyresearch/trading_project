@@ -66,6 +66,36 @@ class LoginReq(BaseModel):
     emailOrUser: str
     password: str
     remember: bool = True
+    
+class ChangeMyPasswordReq(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=5)
+
+class AdminSetPasswordReq(BaseModel):
+    userId: str
+    new_password: str = Field(min_length=5)
+
+
+async def _current_user_from_access(req: Request) -> dict:
+    access_token = _get_access_token(req)
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    payload = decode_token(access_token)
+    require_token_type(payload, "access")
+
+    sub = str(payload["sub"])
+
+    db = get_db()
+    users = db["users"]
+    user = await users.find_one(
+        {"_id": _oid(sub)},
+        {"password_hash": 1, "passwordHash": 1, "role": 1, "is_active": 1},
+    )
+    if not user or not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    return user
 
 
 def _pick_user_identifier(email_or_user: str) -> dict:
@@ -191,6 +221,60 @@ async def login(body: LoginReq):
     set_auth_cookies(resp, access_token=access, refresh_token=refresh, remember=body.remember)
     return resp
 
+
+@router.post("/change-password")
+async def change_password(req: Request, body: ChangeMyPasswordReq):
+    user = await _current_user_from_access(req)
+
+    pw_hash = user.get("password_hash") or user.get("passwordHash")
+    if not isinstance(pw_hash, str) or not verify_password(body.current_password, pw_hash):
+        raise HTTPException(status_code=401, detail="Invalid current password")
+
+    if len(body.new_password or "") < 5:
+        raise HTTPException(status_code=400, detail="Password must be at least 5 characters.")
+
+    new_hash = hash_password(body.new_password)
+    now = datetime.now(timezone.utc)
+
+    db = get_db()
+    users = db["users"]
+    await users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password_hash": new_hash, "updated_at": now}},
+    )
+    resp = JSONResponse({"ok": True})
+    clear_auth_cookies(resp)
+    return resp
+
+@router.post("/admin/set-password")
+async def admin_set_password(req: Request, body: AdminSetPasswordReq):
+    admin = await _current_user_from_access(req)
+    role = admin.get("role") or "user"
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    if len(body.new_password or "") < 5:
+        raise HTTPException(status_code=400, detail="Password must be at least 5 characters.")
+
+    try:
+        target_oid = ObjectId(body.userId)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid userId")
+
+    new_hash = hash_password(body.new_password)
+    now = datetime.now(timezone.utc)
+
+    db = get_db()
+    users = db["users"]
+
+    res = await users.update_one(
+        {"_id": target_oid},
+        {"$set": {"password_hash": new_hash, "updated_at": now}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"ok": True}
 
 @router.post("/logout")
 async def logout_post():
