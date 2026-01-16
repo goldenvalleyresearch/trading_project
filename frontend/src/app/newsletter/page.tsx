@@ -73,8 +73,8 @@ export default function NewsletterPage() {
               <a className={styles.secondaryBtn} href="/transparency">
                 See methodology →
               </a>
-              <a href="/account/create" className={styles.premiumBtnInline}>
-                Premium emails →
+              <a href="/performance" className={styles.premiumBtnInline}>
+                Performance →
               </a>
             </div>
           </div>
