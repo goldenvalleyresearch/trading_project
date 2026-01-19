@@ -44,6 +44,42 @@ function fmtPct(x: number) {
   return `${(x * 100).toFixed(2)}%`;
 }
 
+function gainDirClass(v: number) {
+  if (!Number.isFinite(v) || v === 0) return "";
+  return v > 0 ? styles.gainPos : styles.gainNeg;
+}
+
+function gainLevelClassFromDollar(d: number) {
+  if (!Number.isFinite(d) || d === 0) return styles.gainL0;
+  const a = Math.abs(d);
+
+  // $ tranches: 0–25, 25–50, 50–75, 75+
+  if (a < 25) return styles.gainL1;
+  if (a < 50) return styles.gainL2;
+  if (a < 75) return styles.gainL3;
+  return styles.gainL4;
+}
+
+function gainLevelClassFromPct(pctDecimal: number) {
+  if (!Number.isFinite(pctDecimal) || pctDecimal === 0) return styles.gainL0;
+  const aPct = Math.abs(pctDecimal * 100);
+
+  // % tranches: 0–5, 5–10, 10–15, 15–20, 20+
+  if (aPct < 5) return styles.gainL1;
+  if (aPct < 10) return styles.gainL2;
+  if (aPct < 15) return styles.gainL2; // keep same as 5–10 (still “moderate”)
+  if (aPct < 20) return styles.gainL3;
+  return styles.gainL4;
+}
+
+function gainClassDollar(d: number) {
+  return [styles.gainCell, gainDirClass(d), gainLevelClassFromDollar(d)].filter(Boolean).join(" ");
+}
+
+function gainClassPct(p: number) {
+  return [styles.gainCell, gainDirClass(p), gainLevelClassFromPct(p)].filter(Boolean).join(" ");
+}
+
 function toISODate(x: any): string | null {
   if (!x) return null;
   const s = String(x).trim();
@@ -201,12 +237,13 @@ export default function Holdings({ rows }: Props) {
                         <td className={styles.num}>{fmtMoney2(mv)}</td>
                         <td className={styles.num}>{fmtPct(weight)}</td>
                         <td className={styles.num}>{Number.isFinite(daysHeld) ? `${daysHeld}` : "—"}</td>
-                        <td className={`${styles.num} ${Number.isFinite(dollarGain) && dollarGain < 0 ? styles.neg : styles.pos}`}>
+                        <td className={`${styles.num} ${gainClassDollar(dollarGain)}`}>
                           {fmtMoney2(dollarGain)}
                         </td>
-                        <td className={`${styles.num} ${Number.isFinite(pctGain) && pctGain < 0 ? styles.neg : styles.pos}`}>
+                        <td className={`${styles.num} ${gainClassPct(pctGain)}`}>
                           {fmtPct(pctGain)}
                         </td>
+
                       </tr>
                     );
                   })}
@@ -337,13 +374,14 @@ function MobileRow({ p, netValue, isCash }: { p: any; netValue: number; isCash?:
 
             <div className={styles.mobilePill}>
               <span className={styles.mobileK}>$ Gain</span>
-              <span className={styles.mobileV}>{fmtMoney2(dollarGain)}</span>
+              <span className={`${styles.mobileV} ${gainClassDollar(dollarGain)}`}>{fmtMoney2(dollarGain)}</span>
             </div>
 
             <div className={styles.mobilePill}>
               <span className={styles.mobileK}>% Gain</span>
-              <span className={styles.mobileV}>{fmtPct(pctGain)}</span>
+              <span className={`${styles.mobileV} ${gainClassPct(pctGain)}`}>{fmtPct(pctGain)}</span>
             </div>
+
           </>
         )}
 
