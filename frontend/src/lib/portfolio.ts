@@ -19,7 +19,10 @@ type ApiPosition = {
 
   last_price?: number;
   market_value?: number;
+
+  // IMPORTANT: these exist in your snapshots and backend response
   cost_value?: number;
+  avg_cost?: number;
 
   day_change?: number;
   day_change_pct?: number;
@@ -28,6 +31,7 @@ type ApiPosition = {
 
   price_as_of?: string | null;
 
+  // legacy fallbacks
   priceAsOf?: string | null;
   updated_at?: string | null;
   updatedAt?: string | null;
@@ -145,35 +149,48 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
   ]);
   const total = Number(latest.total_value);
 
+  // IMPORTANT:
+  // Holdings.tsx wants raw numeric fields like avg_cost + cost_value so it can render:
+  // cost/share, $ gain, % gain. So we pass those through.
   return data.map((p: ApiPosition) => {
-    const value = Number(p.market_value ?? 0);
-    const price = Number(p.last_price ?? 0);
-    const qty = Number(p.quantity ?? 0);
+    const market_value = typeof p.market_value === "number" ? p.market_value : Number(p.market_value ?? 0);
+    const last_price = typeof p.last_price === "number" ? p.last_price : Number(p.last_price ?? 0);
+    const quantity = typeof p.quantity === "number" ? p.quantity : Number(p.quantity ?? 0);
 
-    const dayPct = typeof p.day_change_pct === "number" ? p.day_change_pct : null;
-    const unrealPct = typeof p.unrealized_pl_pct === "number" ? p.unrealized_pl_pct : null;
+    const cost_value = typeof p.cost_value === "number" ? p.cost_value : Number(p.cost_value ?? 0);
+    const avg_cost = typeof p.avg_cost === "number" ? p.avg_cost : Number(p.avg_cost ?? 0);
 
     const w =
-      Number.isFinite(value) && Number.isFinite(total) && total > 0 ? value / total : NaN;
+      Number.isFinite(market_value) && Number.isFinite(total) && total > 0 ? market_value / total : NaN;
 
     const price_as_of =
       p.price_as_of ?? p.priceAsOf ?? p.updated_at ?? p.updatedAt ?? null;
 
+    // return the "PositionRow"-like object, but include the raw fields too
     return {
       symbol: p.ticker,
       name: p.name ?? p.ticker,
-      qty,
-      avg: 0,
-      price: Number.isFinite(price) ? Number(price.toFixed(2)) : 0,
-      value: Number.isFinite(value) ? Number(value.toFixed(2)) : 0,
+
+      qty: quantity,
+      avg: avg_cost, // old UI field
+      price: Number.isFinite(last_price) ? Number(last_price.toFixed(2)) : 0,
+      value: Number.isFinite(market_value) ? Number(market_value.toFixed(2)) : 0,
       weight: Number.isFinite(w) ? pct(w) : "—",
-      day: dayPct === null ? "—" : pct(dayPct),
+      day: typeof p.day_change_pct === "number" ? pct(p.day_change_pct) : "—",
       pnl:
-        unrealPct === null || typeof p.unrealized_pl !== "number"
-          ? "—"
-          : `${money(p.unrealized_pl)} (${pct(unrealPct)})`,
+        typeof p.unrealized_pl === "number" && typeof p.unrealized_pl_pct === "number"
+          ? `${money(p.unrealized_pl)} (${pct(p.unrealized_pl_pct)})`
+          : "—",
       price_as_of,
-    } as PositionRow;
+
+      // EXTRA FIELDS (critical for new holdings columns)
+      ticker: p.ticker,
+      quantity,
+      last_price,
+      market_value,
+      cost_value,
+      avg_cost,
+    } as any;
   });
 }
 
