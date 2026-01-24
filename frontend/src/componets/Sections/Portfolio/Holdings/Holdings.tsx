@@ -67,10 +67,12 @@ function gainLevelClassFromPct(pctDecimal: number) {
   // % tranches: 0–5, 5–10, 10–15, 15–20, 20+
   if (aPct < 5) return styles.gainL1;
   if (aPct < 10) return styles.gainL2;
-  if (aPct < 15) return styles.gainL2; // keep same as 5–10 (still “moderate”)
+  if (aPct < 15) return styles.gainL3;
   if (aPct < 20) return styles.gainL3;
-  return styles.gainL4;
+  return styles.gainL4; // 20%+ max
 }
+
+
 
 function gainClassDollar(d: number) {
   return [styles.gainCell, gainDirClass(d), gainLevelClassFromDollar(d)].filter(Boolean).join(" ");
