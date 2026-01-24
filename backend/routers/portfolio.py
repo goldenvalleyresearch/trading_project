@@ -14,10 +14,13 @@ from core.db import get_db
 
 router = APIRouter(tags=["Portfolio"])
 
-
 REFRESH_EVERY_SEC = 35 * 60
 REFRESH_CONCURRENCY = 8
 
+
+# -----------------------
+# Response Models
+# -----------------------
 
 class PositionOut(BaseModel):
     ticker: str
@@ -29,8 +32,12 @@ class PositionOut(BaseModel):
 
     price_as_of: Optional[datetime] = None
 
+    # Fidelity-derived cost fields (do NOT let Polygon touch these)
     cost_value: Optional[float] = None
     avg_cost: Optional[float] = None
+
+    # New: used by frontend for days-held (can remain None until you wire a true source)
+    opened_at: Optional[datetime] = None
 
     day_change: Optional[float] = None
     day_change_pct: Optional[float] = None
@@ -74,6 +81,10 @@ class EquityCurveResp(BaseModel):
     mode: str
 
 
+# -----------------------
+# Helpers
+# -----------------------
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -103,13 +114,74 @@ def _positions_list(doc: dict) -> list:
     arr = doc.get("data")
     return arr if isinstance(arr, list) else []
 
-def _is_weekday_utc(d: datetime) -> bool:
-    return d.weekday() < 5
+
+def _position_value(p: dict) -> float:
+    """
+    Fidelity exports may name the 'current value' field differently depending on the ingest.
+    We normalize it here.
+    """
+    return _coerce_float(
+        p.get("market_value", None)
+        if p.get("market_value", None) is not None
+        else (
+            p.get("value", None)
+            if p.get("value", None) is not None
+            else (
+                p.get("current_value", None)
+                if p.get("current_value", None) is not None
+                else p.get("currentValue", 0.0)
+            )
+        ),
+        0.0,
+    )
 
 
 def _is_cash_like_ticker(t: str) -> bool:
     t = (t or "").upper().strip()
     return bool(t) and t.endswith("**")
+
+
+def _extract_pending_amount(doc: dict) -> float:
+    """
+    Prefer doc.pending_amount if set.
+    Otherwise, find the 'Pending activity' row inside positions (often has blank ticker/symbol).
+    """
+    v = doc.get("pending_amount", None)
+    if isinstance(v, (int, float)):
+        return float(v)
+
+    pending = 0.0
+    for p in _positions_list(doc):
+        if not isinstance(p, dict):
+            continue
+
+        desc = str(
+            p.get("description")
+            or p.get("desc")
+            or p.get("name")
+            or ""
+        ).lower()
+
+        if "pending" in desc:
+            pending += _position_value(p)
+
+    return float(pending)
+
+
+def _snapshot_net_value(doc: dict) -> float:
+    """
+    Snapshot truth:
+    sum(all position values INCLUDING SPAXX** cash position)
+    + pending activity (can be negative)
+    """
+    total = 0.0
+    for p in _positions_list(doc):
+        if not isinstance(p, dict):
+            continue
+        total += _position_value(p)
+
+    total += _extract_pending_amount(doc)
+    return float(total)
 
 
 async def _latest_snapshot_doc() -> dict:
@@ -128,7 +200,6 @@ async def _snapshot_doc_for(as_of: str) -> dict:
     if not doc:
         raise HTTPException(status_code=404, detail=f"Snapshot not found for as_of={as_of}")
     return doc
-
 
 
 def _requests_get_json(url: str, params: dict, timeout: int = 15) -> Tuple[int, dict, str]:
@@ -194,6 +265,7 @@ async def _latest_snapshot_tickers(limit: int = 2000) -> List[str]:
             continue
         tickers.append(t)
     return sorted(set(tickers))[:limit]
+
 
 async def ensure_prices_fresh(
     max_age_sec: int = REFRESH_EVERY_SEC,
@@ -301,6 +373,7 @@ async def ensure_prices_fresh(
         "as_of": now,
     }
 
+
 async def _prices_map() -> Dict[str, dict]:
     db = get_db()
     col = db["prices_latest"]
@@ -318,6 +391,10 @@ async def _prices_map() -> Dict[str, dict]:
 
 
 def _apply_live_price(p: dict, live: dict) -> dict:
+    """
+    IMPORTANT: This does NOT update MongoDB snapshot data.
+    It only overlays price/value fields in the API response.
+    """
     out = dict(p)
 
     q = _coerce_float(p.get("quantity", 0.0), 0.0)
@@ -329,6 +406,7 @@ def _apply_live_price(p: dict, live: dict) -> dict:
     out["last_price"] = price
     out["market_value"] = float(mv)
 
+    # compatibility aliases
     out["price"] = price
     out["value"] = float(mv)
 
@@ -338,39 +416,6 @@ def _apply_live_price(p: dict, live: dict) -> dict:
         out["unrealized_pl_pct"] = float(unreal / cost_value) if cost_value else 0.0
 
     return out
-
-
-def _compute_live_total_and_missing(doc: dict, prices: Dict[str, dict]) -> Tuple[float, List[str]]:
-    cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0.0), 0.0)
-    pending_amount = _coerce_float(doc.get("pending_amount", 0.0), 0.0)
-
-    live_non_cash = 0.0
-    missing: list[str] = []
-
-    for p in _positions_list(doc):
-        if not isinstance(p, dict):
-            continue
-
-        t = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-        if not t or _is_cash_like_ticker(t):
-            continue
-
-        q = _coerce_float(p.get("quantity") or p.get("qty") or 0.0, 0.0)
-
-        live = prices.get(t)
-        if live is None or not isinstance(live.get("price"), (int, float)):
-            missing.append(t)
-            continue
-
-        px = _coerce_float(live.get("price"), 0.0)
-        if px <= 0:
-            missing.append(t)
-            continue
-
-        live_non_cash += q * px
-
-    return float(live_non_cash + cash_spaxx + pending_amount), missing
-
 
 
 def _compute_dashboard_from_positions(
@@ -423,7 +468,6 @@ async def get_latest_positions(
     as_of = str(doc.get("as_of", ""))[:10]
 
     await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000, force=force_refresh)
-
     prices = await _prices_map()
 
     global_ts = await _latest_prices_timestamp()
@@ -460,6 +504,7 @@ async def get_latest_positions(
                 price_as_of=price_as_of,
                 cost_value=(None if pp.get("cost_value") is None else _coerce_float(pp.get("cost_value"))),
                 avg_cost=(None if pp.get("avg_cost") is None else _coerce_float(pp.get("avg_cost"))),
+                opened_at=_as_aware_utc(pp.get("opened_at")),
                 day_change=(None if pp.get("day_change") is None else _coerce_float(pp.get("day_change"))),
                 day_change_pct=(None if pp.get("day_change_pct") is None else _coerce_float(pp.get("day_change_pct"))),
                 unrealized_pl=(None if pp.get("unrealized_pl") is None else _coerce_float(pp.get("unrealized_pl"))),
@@ -474,41 +519,44 @@ async def get_latest_positions(
 async def dashboard_latest(
     refresh_max_age_sec: int = Query(REFRESH_EVERY_SEC, ge=30, le=86400),
 ):
+    db = get_db()
+    snap_col = db["snapshots"]
+
     doc = await _latest_snapshot_doc()
     as_of = str(doc.get("as_of", ""))[:10]
 
-    cash_spaxx = _coerce_float(doc.get("cash_spaxx", 0))
-    pending_amount = _coerce_float(doc.get("pending_amount", 0))
-    todays_pnl_total = _coerce_float(doc.get("todays_pnl_total", 0))
+    pending_amount = _extract_pending_amount(doc)
 
-    try:
-        await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
-    except Exception:
-        pass
+    last_two = (
+        await snap_col.find({}, {"_id": 0})
+        .sort("as_of", -1)
+        .limit(2)
+        .to_list(length=2)
+    )
+    today_doc = last_two[0] if last_two else doc
+    prev_doc = last_two[1] if len(last_two) > 1 else None
 
-    prices = await _prices_map()
+    today_total = _snapshot_net_value(today_doc)
+    prev_total = _snapshot_net_value(prev_doc) if prev_doc else today_total
 
-    positions_live: list[dict] = []
-    for p in _positions_list(doc):
-        if not isinstance(p, dict):
-            continue
-        ticker = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
-        if not ticker:
-            continue
-        pp = p
-        if not _is_cash_like_ticker(ticker):
-            live = prices.get(ticker)
-            if live is not None:
-                pp = _apply_live_price(p, live)
-        positions_live.append(pp)
+    todays_pnl_total = float(today_total - prev_total)
 
-    return _compute_dashboard_from_positions(
+    # IMPORTANT: snapshot truth only (no Polygon live pricing here)
+    positions_live = _positions_list(doc)
+
+    # Avoid double-counting cash if SPAXX** is already included as a position row
+    cash_spaxx = 0.0
+
+    dash = _compute_dashboard_from_positions(
         as_of=as_of,
         positions=positions_live,
         cash_spaxx=cash_spaxx,
         pending_amount=pending_amount,
         todays_pnl_total=todays_pnl_total,
     )
+
+    dash["total_value"] = float(_snapshot_net_value(doc))
+    return dash
 
 
 @router.get("/api/history/snapshots")
@@ -561,128 +609,152 @@ async def legacy_portfolio_summary(
         "invested_pct": float(invested_pct),
         "snapshot_as_of": dash["snapshot_as_of"],
     }
-
-
 @router.get("/api/portfolio/equity-curve", response_model=EquityCurveResp)
 async def legacy_equity_curve(
     window: int = Query(365, ge=1, le=20000),
-    mode: str = Query("equity", pattern="^(equity|twr)$"),
+    mode: str = Query("equity", pattern=r"^(equity|twr|pnl|index|voo_index|qqq_index)$"),
     refresh_max_age_sec: int = Query(REFRESH_EVERY_SEC, ge=30, le=86400),
 ):
     db = get_db()
-
     perf = db["performance_daily"]
+
     cur = perf.find(
         {},
-        {"_id": 0, "date": 1, "balance": 1, "net_flow": 1},
+        {
+            "_id": 0,
+            "date": 1,
+            "balance": 1,
+            "net_flow": 1,
+            "dollar_change": 1,
+
+            # portfolio daily return
+            "pct_change": 1,
+            "pct_change_ret": 1,
+            "roth_ret": 1,
+
+            # benchmark prices
+            "voo_close": 1,
+            "qqq_close": 1,
+            "voo": 1,
+            "qqq": 1,
+        },
     ).sort("date", -1).limit(window)
 
-    rows = await cur.to_list(length=window)
-    rows = list(reversed(rows))
+    rows = list(reversed(await cur.to_list(length=window)))
 
     daily: list[dict] = []
     for r in rows:
         d = str(r.get("date", ""))[:10]
         bal = r.get("balance")
-        nf = r.get("net_flow", 0.0)
-        if len(d) == 10 and isinstance(bal, (int, float)):
-            daily.append(
-                {
-                    "date": d,
-                    "balance": float(bal),
-                    "net_flow": float(nf) if isinstance(nf, (int, float)) else 0.0,
-                }
-            )
+        if not (len(d) == 10 and isinstance(bal, (int, float))):
+            continue
 
-    if mode == "equity":
-        try:
-            await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
-        except Exception:
-            pass
+        # portfolio daily return (already decimal)
+        pc = r.get("pct_change")
+        if pc is None:
+            pc = r.get("pct_change_ret")
+        if pc is None:
+            pc = r.get("roth_ret")
 
-        try:
-            doc = await _latest_snapshot_doc()
-            prices = await _prices_map()
+        # benchmark closes
+        voo_close = r.get("voo_close") or r.get("voo")
+        qqq_close = r.get("qqq_close") or r.get("qqq")
 
-            now = utcnow()
-            if _is_weekday_utc(now):
-                live_total, missing = _compute_live_total_and_missing(doc, prices)
-                if not missing:
-                    live_date = now.date().isoformat()
-                    if daily and daily[-1]["date"] == live_date:
-                        daily[-1]["balance"] = live_total
-                        daily[-1]["net_flow"] = float(daily[-1].get("net_flow") or 0.0)
-                    else:
-                        daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
+        daily.append({
+            "date": d,
+            "balance": float(bal),
+            "net_flow": float(r.get("net_flow") or 0.0),
+            "dollar_change": float(r["dollar_change"]) if isinstance(r.get("dollar_change"), (int, float)) else None,
+            "pct_change": float(pc) if isinstance(pc, (int, float)) else None,
+            "voo_close": float(voo_close) if isinstance(voo_close, (int, float)) else None,
+            "qqq_close": float(qqq_close) if isinstance(qqq_close, (int, float)) else None,
+        })
 
-                    if len(daily) > window:
-                        daily = daily[-window:]
-        except Exception:
-            pass
+    # --------------------
+    # INDEX / VOO_INDEX / QQQ_INDEX (SINGLE SOURCE OF TRUTH)
+    # --------------------
+    if mode in ("index", "voo_index", "qqq_index"):
+        if not daily:
+            return {"series": [], "count": 0, "as_of": "—", "mode": mode}
 
-        series = [{"date": r["date"], "balance": float(r["balance"])} for r in daily]
-        as_of = series[-1]["date"] if series else "—"
-        return {"series": series, "count": len(series), "as_of": as_of, "mode": mode}
+        idx = 100.0
+        out = [{"date": daily[0]["date"], "balance": 100.0}]
 
-    if mode == "twr":
-        try:
-            await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000)
-        except Exception:
-            pass
+        for i in range(1, len(daily)):
+            prev = daily[i - 1]
+            cur = daily[i]
 
-        try:
-            doc = await _latest_snapshot_doc()
-            prices = await _prices_map()
+            if mode == "index":
+                ret = cur.get("pct_change")
 
-            now = utcnow()
-            if _is_weekday_utc(now):
-                live_total, missing = _compute_live_total_and_missing(doc, prices)
-                if not missing:
-                    live_date = now.date().isoformat()
-                    if daily and daily[-1]["date"] == live_date:
-                        daily[-1]["balance"] = live_total
-                        daily[-1]["net_flow"] = 0.0
-                    else:
-                        daily.append({"date": live_date, "balance": live_total, "net_flow": 0.0})
+            elif mode == "voo_index":
+                p, c = prev.get("voo_close"), cur.get("voo_close")
+                ret = (c - p) / p if isinstance(p, (int, float)) and isinstance(c, (int, float)) and p > 0 else 0.0
 
-                    if len(daily) > window:
-                        daily = daily[-window:]
-        except Exception:
-            pass
+            else:  # qqq_index
+                p, c = prev.get("qqq_close"), cur.get("qqq_close")
+                ret = (c - p) / p if isinstance(p, (int, float)) and isinstance(c, (int, float)) and p > 0 else 0.0
 
-    if len(daily) < 1:
-        return {"series": [], "count": 0, "as_of": "—", "mode": mode}
+            if not isinstance(ret, (int, float)):
+                ret = 0.0
 
-    if len(daily) == 1:
+            idx *= (1.0 + ret)
+
+            out.append({
+                "date": cur["date"],
+                "balance": round(idx, 4)
+            })
+
         return {
-            "series": [{"date": daily[0]["date"], "balance": 100.0}],
-            "count": 1,
-            "as_of": daily[0]["date"],
-            "mode": mode,
+            "series": out,
+            "count": len(out),
+            "as_of": out[-1]["date"],
+            "mode": mode
         }
 
-    idx = 100.0
-    out = [{"date": daily[0]["date"], "balance": idx}]
+    # --------------------
+    # EQUITY (RAW BALANCE)
+    # --------------------
+    if mode == "equity":
+        series = [{"date": r["date"], "balance": r["balance"]} for r in daily]
+        return {"series": series, "count": len(series), "as_of": series[-1]["date"] if series else "—", "mode": mode}
 
-    prev = float(daily[0]["balance"])
-    if prev <= 0:
+    # --------------------
+    # PNL (CONTRIBUTION NEUTRAL)
+    # --------------------
+    if mode == "pnl":
+        running = 0.0
+        out = []
+        for r in daily:
+            if isinstance(r.get("dollar_change"), (int, float)):
+                running += r["dollar_change"]
+            out.append({"date": r["date"], "balance": round(running, 2)})
+
+        return {"series": out, "count": len(out), "as_of": out[-1]["date"] if out else "—", "mode": mode}
+
+    # --------------------
+    # TWR
+    # --------------------
+    if mode == "twr":
+        if not daily:
+            return {"series": [], "count": 0, "as_of": "—", "mode": mode}
+
+        idx = 100.0
+        out = [{"date": daily[0]["date"], "balance": idx}]
+        prev_bal = daily[0]["balance"]
+
         for r in daily[1:]:
-            out.append({"date": r["date"], "balance": idx})
+            cur_bal = r["balance"]
+            flow = r["net_flow"]
+            ret = (cur_bal - flow - prev_bal) / prev_bal if prev_bal else 0.0
+            idx *= (1.0 + ret)
+            out.append({"date": r["date"], "balance": round(idx, 4)})
+            prev_bal = cur_bal
+
         return {"series": out, "count": len(out), "as_of": out[-1]["date"], "mode": mode}
 
-    for r in daily[1:]:
-        cur_bal = float(r["balance"])
-        flow = float(r.get("net_flow") or 0.0)
 
-        ret = (cur_bal - flow - prev) / prev if prev else 0.0
-        if ret < -0.99:
-            ret = -0.99
 
-        idx *= (1.0 + ret)
-        out.append({"date": r["date"], "balance": float(round(idx, 4))})
-        prev = cur_bal
-
-    return {"series": out, "count": len(out), "as_of": out[-1]["date"], "mode": mode}
 
 @router.get("/api/benchmark/price-series")
 async def benchmark_price_series(

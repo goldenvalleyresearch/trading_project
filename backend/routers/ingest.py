@@ -57,7 +57,6 @@ def require_admin(req: Request) -> dict:
     return payload
 
 
-
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -173,7 +172,6 @@ def _looks_like_symbol(sym: str) -> bool:
     if s.endswith("**"):
         return True
     return bool(TICKER_RE.fullmatch(s))
-
 
 
 def _sniff_delim(preview: str) -> str:
@@ -339,7 +337,7 @@ def _col_score_value(df: pd.DataFrame, col: str) -> int:
 
 def _pick_best(df: pd.DataFrame, candidates: list[str], scorer) -> Optional[str]:
     best = None
-    best_score = -10**9
+    best_score = -(10**9)
     for c in candidates:
         if not c or c not in df.columns:
             continue
@@ -359,16 +357,16 @@ def _pick_columns_for_positions(df: pd.DataFrame) -> dict[str, Optional[str]]:
         return out
 
     col_symbol = _find_col_exact(df, "Symbol")
-    col_desc   = _find_col_exact(df, "Description")
-    col_qty    = _find_col_exact(df, "Quantity")
-    col_price  = _find_col_exact(df, "Last Price")
-    col_value  = _find_col_exact(df, "Current Value")
+    col_desc = _find_col_exact(df, "Description")
+    col_qty = _find_col_exact(df, "Quantity")
+    col_price = _find_col_exact(df, "Last Price")
+    col_value = _find_col_exact(df, "Current Value")
 
-    col_day    = _find_col_exact(df, "Today's Gain/Loss Dollar")
-    col_total  = _find_col_exact(df, "Total Gain/Loss Dollar")
+    col_day = _find_col_exact(df, "Today's Gain/Loss Dollar")
+    col_total = _find_col_exact(df, "Total Gain/Loss Dollar")
     col_weight = _find_col_exact(df, "Percent Of Account")
-    col_avg    = _find_col_exact(df, "Average Cost Basis")
-    col_cost   = _find_col_exact(df, "Cost Basis Total")
+    col_avg = _find_col_exact(df, "Average Cost Basis")
+    col_cost = _find_col_exact(df, "Cost Basis Total")
 
     if not col_symbol:
         sym_matches = uniq([_find_col_contains(df, ["symbol", "ticker"], reject_any=["cusip"])]) or list(df.columns)
@@ -463,6 +461,7 @@ def _repair_shift_if_needed(df: pd.DataFrame, cols: dict[str, Optional[str]]) ->
 
     return cols
 
+
 def _pos_map(positions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for p in positions or []:
@@ -556,7 +555,7 @@ class IngestPerformanceResp(BaseModel):
     rows_written: int
 
 
-@router.post("/positions", response_model=IngestPositionsResp)
+@router.post("/positions")
 async def ingest_positions(
     req: Request,
     file: UploadFile = File(...),
@@ -574,14 +573,14 @@ async def ingest_positions(
     cols = _repair_shift_if_needed(df, _pick_columns_for_positions(df))
 
     col_symbol = cols["symbol"]
-    col_desc   = cols["desc"]
-    col_qty    = cols["qty"]
-    col_price  = cols["price"]
-    col_value  = cols["value"]
-    col_cost   = cols["cost"]
-    col_avg    = cols["avg"]
-    col_day    = cols["day"]
-    col_total  = cols["total"]
+    col_desc = cols["desc"]
+    col_qty = cols["qty"]
+    col_price = cols["price"]
+    col_value = cols["value"]
+    col_cost = cols["cost"]
+    col_avg = cols["avg"]
+    col_day = cols["day"]
+    col_total = cols["total"]
     col_weight = cols["weight"]
 
     if not col_symbol:
@@ -590,9 +589,29 @@ async def ingest_positions(
         raise HTTPException(status_code=400, detail=f"Missing Quantity column after repair. Columns: {list(df.columns)}")
 
     positions: list[dict[str, Any]] = []
+    pending_amount = 0.0
+    debug_pending_rows: list[dict[str, Any]] = []
+
     for _, row in df.iterrows():
         sym_raw = str(row.get(col_symbol, "")).strip()
         desc_raw = str(row.get(col_desc, "")).strip() if col_desc else ""
+
+        sym_norm = sym_raw.strip().upper()
+
+        # ---- CAPTURE PENDING ACTIVITY (Fidelity row) ----
+        # Fidelity sometimes puts "Pending activity" in the symbol column OR "PENDING" as a symbol.
+        # Treat both as pending and DO NOT ingest as a position.
+        if sym_norm == "PENDING" or "pending" in sym_raw.lower():
+            raw_val = row.get(col_value) if col_value else None
+            pending_num = _to_float(raw_val) or 0.0
+            pending_amount += float(pending_num)
+
+            if debug:
+                debug_pending_rows.append(row.to_dict())
+
+            continue
+        # ---- END PENDING CAPTURE ----
+
         sym = _clean_symbol(sym_raw)
 
         if _is_disclaimer_row(sym, desc_raw):
@@ -652,7 +671,12 @@ async def ingest_positions(
             },
         )
 
-    total_value = float(sum(float(p.get("market_value") or p.get("value") or 0) for p in positions))
+    # IMPORTANT:
+    # total_value should match Fidelity total (includes SPAXX** line)
+    # pending is NOT a position line in our data, so add it here.
+    positions_total_value = float(sum(float(p.get("market_value") or p.get("value") or 0) for p in positions))
+    total_value = float(positions_total_value + float(pending_amount))
+
     non_cash_positions_value = float(
         sum(
             float(p.get("market_value") or p.get("value") or 0)
@@ -660,6 +684,7 @@ async def ingest_positions(
             if not str(p.get("ticker", "")).endswith("**")
         )
     )
+
     todays_pnl_total = float(sum(float(p.get("todays_gain_loss") or p.get("day") or 0) for p in positions))
 
     db = get_db()
@@ -672,7 +697,7 @@ async def ingest_positions(
         "total_value": total_value,
         "todays_pnl_total": todays_pnl_total,
         "cash_spaxx": 0.0,
-        "pending_amount": 0.0,
+        "pending_amount": float(pending_amount),
         "source": {
             "kind": "positions_upload",
             "filename": filename,
@@ -706,8 +731,12 @@ async def ingest_positions(
 
     if debug:
         resp["debug_picked_after_repair"] = cols
+        resp["debug_pending_amount"] = float(pending_amount)
+        resp["debug_positions_total_value"] = float(positions_total_value)
+        resp["debug_total_value_including_pending"] = float(total_value)
         resp["debug_positions_preview"] = positions[:10]
-        resp["debug_df_head"] = df.head(5).to_dict(orient="records")
+        resp["debug_df_head"] = df.head(10).to_dict(orient="records")
+        resp["debug_pending_rows"] = debug_pending_rows
 
     return resp
 
@@ -744,23 +773,38 @@ async def ingest_performance(
 
     df, raw, filename = await _read_upload_table(file)
 
+    # Your current CSV headers (based on screenshot)
     col_date = _find_col_contains(df, ["date"]) or _find_col_exact(df, "Date")
-    col_bal = _find_col_contains(df, ["balance", "equity", "value", "roth balance"])
+    col_bal = _find_col_contains(df, ["roth balance", "balance", "equity", "value"])
+
+    col_dollar_change = _find_col_contains(df, ["dollar change", "dollar cha", "dollar chg", "dollar"])
+    col_roth_ret = _find_col_exact(df, "Roth") or _find_col_contains(df, ["roth"], reject_any=["balance"])
+    col_voo_close = _find_col_exact(df, "VOO") or _find_col_contains(df, ["voo"], reject_any=["balance", "ret", "return", "pct", "%"])
+    col_qqq_close = _find_col_exact(df, "QQQ") or _find_col_contains(df, ["qqq"], reject_any=["balance", "ret", "return", "pct", "%"])
 
     if not col_date or not col_bal:
         raise HTTPException(
             status_code=400,
-            detail=f"Missing required columns. Need date and balance/equity/value. Found: {list(df.columns)}",
+            detail=f"Missing required columns. Need date and roth balance. Found: {list(df.columns)}",
         )
 
     def _to_iso_date(raw_s: str) -> Optional[str]:
         s = (raw_s or "").strip()
         if not s:
             return None
+
+        # Skip non-date rows like "TRANSFER"
+        if not any(ch.isdigit() for ch in s):
+            return None
+
+        # Already ISO
         if ISO_DATE_RE.match(s[:10]):
             return s[:10]
+
+        # Excel-ish "Thursday 9/18/2025" or "9/18/2025"
         parts = s.split()
-        candidate = parts[-1] if parts and "/" in parts[-1] else s
+        candidate = parts[-1] if parts else s
+
         m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", candidate)
         if not m:
             return None
@@ -769,27 +813,97 @@ async def ingest_performance(
             return None
         return f"{yy:04d}-{mm:02d}-{dd:02d}"
 
+    def _clamp_ret(x: Optional[float]) -> Optional[float]:
+        """
+        Returns are DECIMALS in your file:
+          0.0197 = +1.97%
+         -0.0064 = -0.64%
+
+        We just clamp insane values so one bad row doesn't blow up the chart.
+        """
+        if x is None:
+            return None
+        v = float(x)
+
+        # If someone accidentally pastes 1.97 (meaning 197%), that's probably wrong.
+        # Clamp, but keep generous bounds.
+        if v < -0.99:
+            v = -0.99
+        if v > 5.0:
+            v = 5.0
+
+        return v
+
     db = get_db()
     perf = db["performance_daily"]
 
-    written = 0
-    for _, row in df.iterrows():
-        d = _to_iso_date(str(row.get(col_date, "")).strip())
+    # Build clean rows, sort by date so running totals are deterministic
+    rows: list[dict[str, Any]] = []
+    for _, r in df.iterrows():
+        d = _to_iso_date(str(r.get(col_date, "")).strip())
         if not d:
             continue
 
-        bal = _to_float(row.get(col_bal))
+        bal = _to_float(r.get(col_bal))
         if bal is None:
             continue
 
-        await perf.update_one(
-            {"date": d},
+        dc = _to_float(r.get(col_dollar_change)) if col_dollar_change else None
+        roth_ret = _clamp_ret(_to_float(r.get(col_roth_ret))) if col_roth_ret else None
+        voo_close = _to_float(r.get(col_voo_close)) if col_voo_close else None
+        qqq_close = _to_float(r.get(col_qqq_close)) if col_qqq_close else None
+
+        rows.append(
             {
-                "$set": {"date": d, "balance": float(bal), "updated_at": utcnow()},
-                "$setOnInsert": {"created_at": utcnow()},
-            },
+                "date": d,
+                "balance": float(bal),
+                "dollar_change": float(dc) if dc is not None else None,
+                "roth_ret": roth_ret,          # decimal daily return
+                "voo_close": voo_close,        # price
+                "qqq_close": qqq_close,        # price
+            }
+        )
+
+
+    rows.sort(key=lambda x: x["date"])
+
+    written = 0
+
+    # Running totals you asked for (simple sum of daily % points)
+    roth_running_pct = 0.0
+    voo_running_pct = 0.0
+    qqq_running_pct = 0.0
+
+    for row in rows:
+        update_set: dict[str, Any] = {
+            "date": row["date"],
+            "balance": float(row["balance"]),
+            "updated_at": utcnow(),
+            "source_file": filename,
+        }
+
+        if row["dollar_change"] is not None:
+            update_set["dollar_change"] = float(row["dollar_change"])
+
+        # ✅ Store Roth daily return where portfolio.py expects it
+        if row["roth_ret"] is not None:
+            rr = float(row["roth_ret"])
+            update_set["pct_change"] = rr         # <-- THIS is what equity-curve reads
+            update_set["pct_change_pct"] = rr * 100.0
+
+        # ✅ Store benchmark CLOSE prices (router will compute returns)
+        if row.get("voo_close") is not None:
+            update_set["voo_close"] = float(row["voo_close"])
+
+        if row.get("qqq_close") is not None:
+            update_set["qqq_close"] = float(row["qqq_close"])
+
+        await perf.update_one(
+            {"date": row["date"]},
+            {"$set": update_set, "$setOnInsert": {"created_at": utcnow()}},
             upsert=True,
         )
         written += 1
+
 
     return {"rows_written": written}
