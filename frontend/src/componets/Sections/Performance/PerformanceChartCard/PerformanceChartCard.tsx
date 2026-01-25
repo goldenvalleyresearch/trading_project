@@ -5,70 +5,30 @@ import styles from "./PerformanceChartCard.module.css";
 import EquityPreview from "@/componets/UI/EquityPreview/EquityPreview";
 
 type EquityPoint = { d: string; v: number };
-type RangeKey = "5D" | "1M" | "6M" | "1Y" | "ALL";
+type RangeKey = "5D" | "1M" |"3M" | "6M" | "1Y" | "ALL";
 
-function pctStr(x: number | null | undefined): string {
+function pctPtsStr(x: number | null | undefined): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return "—";
-  return `${(x * 100).toFixed(2)}%`;
+  return `${x.toFixed(2)}%`;
 }
 
-function numStr(x: number | null | undefined, digits = 2): string {
-  if (typeof x !== "number" || !Number.isFinite(x)) return "—";
-  return x.toFixed(digits);
+// lookback here is "trading points back" (approx), not calendar days
+function perfFromLookback(points: EquityPoint[], lookbackPoints: number): number | null {
+  if (points.length < lookbackPoints + 1) return null;
+
+  const end = Number(points[points.length - 1].v);
+  const base = Number(points[points.length - 1 - lookbackPoints].v);
+
+  if (!Number.isFinite(end) || !Number.isFinite(base) || base <= 0) return null;
+  return (end / base - 1) * 100;
 }
 
-function daysBetweenISO(a: string, b: string): number {
-  const da = new Date(a + "T00:00:00Z").getTime();
-  const db = new Date(b + "T00:00:00Z").getTime();
-  if (!Number.isFinite(da) || !Number.isFinite(db)) return 0;
-  return Math.max(0, (db - da) / 86400000);
-}
-
-function computeCAGR(points: EquityPoint[]): number | null {
+function perfSinceInception(points: EquityPoint[]): number | null {
   if (points.length < 2) return null;
-  const start = points[0].v;
-  const end = points[points.length - 1].v;
-  if (start <= 0 || end <= 0) return null;
-
-  const days = daysBetweenISO(points[0].d, points[points.length - 1].d);
-  if (days <= 0) return null;
-
-  const years = days / 365.25;
-  return Math.pow(end / start, 1 / years) - 1;
-}
-
-function computeMaxDrawdown(points: EquityPoint[]): number | null {
-  if (points.length < 2) return null;
-  let peak = -Infinity;
-  let maxDD = 0;
-
-  for (const p of points) {
-    if (p.v > peak) peak = p.v;
-    const dd = (p.v - peak) / peak;
-    if (dd < maxDD) maxDD = dd;
-  }
-
-  return maxDD;
-}
-
-function computeSharpe(points: EquityPoint[]): number | null {
-  if (points.length < 20) return null;
-
-  const rets: number[] = [];
-  for (let i = 1; i < points.length; i++) {
-    const r = points[i].v / points[i - 1].v - 1;
-    if (Number.isFinite(r)) rets.push(r);
-  }
-
-  if (rets.length < 10) return null;
-
-  const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
-  const variance =
-    rets.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (rets.length - 1);
-  const sd = Math.sqrt(variance);
-  if (!Number.isFinite(sd) || sd === 0) return null;
-
-  return (mean / sd) * Math.sqrt(252);
+  const end = Number(points[points.length - 1].v);
+  const base = Number(points[0].v);
+  if (!Number.isFinite(end) || !Number.isFinite(base) || base <= 0) return null;
+  return (end / base - 1) * 100;
 }
 
 export default function PerformanceChartCard() {
@@ -88,8 +48,9 @@ export default function PerformanceChartCard() {
           .filter((p) => p.d.length === 10 && Number.isFinite(p.v))
       : [];
 
-    const last = cleaned.at(-1);
-    const key = `${cleaned.length}:${last?.d}:${last?.v?.toFixed(6)}`;
+    const last = cleaned.length ? cleaned[cleaned.length - 1] : null;
+    const key = `${cleaned.length}:${last?.d ?? ""}:${last && Number.isFinite(last.v) ? last.v.toFixed(6) : "x"}`;
+
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
 
@@ -97,11 +58,13 @@ export default function PerformanceChartCard() {
     setUpdatedOn(last?.d ?? "—");
   }, []);
 
-  const cagr = useMemo(() => computeCAGR(points), [points]);
-  const maxDD = useMemo(() => computeMaxDrawdown(points), [points]);
-  const sharpe = useMemo(() => computeSharpe(points), [points]);
+  // 5 trading days, 21 trading days (~1M), 63 trading days (~3M)
+  const perf5D = useMemo(() => perfFromLookback(points, 5), [points]);
+  const perf1M = useMemo(() => perfFromLookback(points, 21), [points]);
+  const perf3M = useMemo(() => perfFromLookback(points, 63), [points]);
+  const perfSI = useMemo(() => perfSinceInception(points), [points]);
 
-  const ranges: RangeKey[] = ["5D", "1M", "6M", "1Y", "ALL"];
+  const ranges: RangeKey[] = ["5D", "1M", "3M", "6M", "1Y", "ALL"];
 
   return (
     <section className={styles.chartCard}>
@@ -116,9 +79,7 @@ export default function PerformanceChartCard() {
             {ranges.map((r) => (
               <button
                 key={r}
-                className={`${styles.rangeBtn} ${
-                  range === r ? styles.rangeActive : ""
-                }`}
+                className={`${styles.rangeBtn} ${range === r ? styles.rangeActive : ""}`}
                 onClick={() => setRange(r)}
                 type="button"
               >
@@ -145,21 +106,24 @@ export default function PerformanceChartCard() {
           rebaseTo100={true}
           onData={handleChartData}
         />
-
       </div>
 
       <div className={styles.statsRow}>
         <div className={styles.stat}>
-          <div className={styles.k}>CAGR</div>
-          <div className={styles.v}>{pctStr(cagr)}</div>
+          <div className={styles.k}>5D</div>
+          <div className={styles.v}>{pctPtsStr(perf5D)}</div>
         </div>
         <div className={styles.stat}>
-          <div className={styles.k}>Max drawdown</div>
-          <div className={styles.v}>{pctStr(maxDD)}</div>
+          <div className={styles.k}>1M</div>
+          <div className={styles.v}>{pctPtsStr(perf1M)}</div>
         </div>
         <div className={styles.stat}>
-          <div className={styles.k}>Sharpe</div>
-          <div className={styles.v}>{numStr(sharpe, 2)}</div>
+          <div className={styles.k}>3M</div>
+          <div className={styles.v}>{pctPtsStr(perf3M)}</div>
+        </div>
+        <div className={styles.stat}>
+          <div className={styles.k}>Since 9/18/25</div>
+          <div className={styles.v}>{pctPtsStr(perfSI)}</div>
         </div>
       </div>
     </section>

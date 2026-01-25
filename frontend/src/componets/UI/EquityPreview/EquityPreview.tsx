@@ -2,18 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  Tooltip,
-  CartesianGrid,
-  YAxis,
-} from "recharts";
+import { ResponsiveContainer, LineChart, Line, XAxis, Tooltip, CartesianGrid, YAxis } from "recharts";
 import { apiGet } from "@/lib/api";
 
 type RangeKey = "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
+type Mode = "equity" | "twr" | "pnl" | "index" | "voo_index" | "qqq_index";
 
 type Props = {
   height?: number;
@@ -22,22 +15,43 @@ type Props = {
   onRangeChange?: (r: RangeKey) => void;
   onData?: (points: Point[]) => void;
 
-  // index modes
-  mode?: "index" | "voo_index" | "qqq_index";
-  benchmarkMode?: "voo_index" | "qqq_index";
-  secondaryBenchmarkMode?: "voo_index" | "qqq_index";
+  // existing benchmark toggle (you can keep this)
+  showSpy?: boolean;
+  spySymbol?: string;
 
+  // rebasing
   rebaseTo100?: boolean;
+
+  // ✅ ADD THESE
+  mode?: Mode;                    // drives the portfolio series (default: "twr" or "equity" — your choice)
+  benchmarkMode?: Mode;           // drives the benchmark series (ex: "voo_index")
+  secondaryBenchmarkMode?: Mode;  // optional 2nd benchmark (ex: "qqq_index")
 };
 
+
 type Point = { d: string; v: number };
-type ChartRow = { d: string; p: number | null; b: number | null; b2: number | null };
-type ChartRowT = { d: string; t: number; p: number | null; b: number | null; b2: number | null };
+type ChartRow = { d: string; p: number | null; b: number | null };
+type ChartRowT = { d: string; t: number; p: number | null; b: number | null };
 
 const TZ = "America/Chicago";
 
 function parseDayToUtcMs(d: string) {
-  return Date.parse(String(d).slice(0, 10) + "T12:00:00Z");
+  const day = String(d).slice(0, 10);
+  return Date.parse(day + "T12:00:00Z");
+}
+
+function daysBetweenISO(a: string, b: string): number {
+  const da = new Date(a + "T00:00:00Z").getTime();
+  const db = new Date(b + "T00:00:00Z").getTime();
+  if (!Number.isFinite(da) || !Number.isFinite(db)) return 0;
+  return Math.max(0, (db - da) / 86400000);
+}
+
+function apiRangeForBenchmark(range: RangeKey): "1M" | "3M" | "1Y" | "5Y" {
+  if (range === "5D" || range === "1M") return "1M";
+  if (range === "3M") return "3M";
+  if (range === "6M" || range === "1Y") return "1Y";
+  return "5Y";
 }
 
 function desiredPoints(range: RangeKey) {
@@ -50,12 +64,15 @@ function desiredPoints(range: RangeKey) {
 }
 
 function fetchWindow(range: RangeKey) {
-  return Math.min(5000, desiredPoints(range) + 600);
+  const need = desiredPoints(range);
+  return Math.min(5000, need + 600);
 }
 
-function normalizeSeries(input: unknown): Point[] {
+function normalizeEquity(input: unknown): Point[] {
   const root = input as any;
-  const arr: any[] = Array.isArray(root?.series) ? root.series : Array.isArray(root) ? root : [];
+  const arr: any[] =
+    Array.isArray(root) ? root : Array.isArray(root?.series) ? root.series : Array.isArray(root?.data) ? root.data : [];
+
   return arr
     .map((p) => ({
       d: String(p?.date ?? p?.d ?? "").slice(0, 10),
@@ -64,138 +81,299 @@ function normalizeSeries(input: unknown): Point[] {
     .filter((p) => p.d.length === 10 && Number.isFinite(p.v));
 }
 
-function uniqByDayKeepLast(points: Point[]) {
-  const m = new Map<string, number>();
-  for (const p of points) m.set(p.d, p.v);
-  return [...m.entries()]
-    .sort((a, b) => parseDayToUtcMs(a[0]) - parseDayToUtcMs(b[0]))
-    .map(([d, v]) => ({ d, v }));
+function normalizeSeriesClose(input: unknown): Point[] {
+  const root = input as any;
+  const arr: any[] =
+    Array.isArray(root) ? root : Array.isArray(root?.series) ? root.series : Array.isArray(root?.data) ? root.data : [];
+
+  return arr
+    .map((p) => ({
+      d: String(p?.date ?? p?.d ?? "").slice(0, 10),
+      v: Number(p?.close ?? p?.c ?? p?.price ?? p?.v),
+    }))
+    .filter((p) => p.d.length === 10 && Number.isFinite(p.v));
 }
 
-function buildTimeline(port: Point[], bench1: Point[], bench2: Point[]) {
-  const pMap = new Map(port.map((x) => [x.d, x.v]));
-  const bMap = new Map(bench1.map((x) => [x.d, x.v]));
-  const b2Map = new Map(bench2.map((x) => [x.d, x.v]));
+function sortByDate(points: Point[]) {
+  return [...points].sort((a, b) => parseDayToUtcMs(a.d) - parseDayToUtcMs(b.d));
+}
 
-  const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys(), ...b2Map.keys()])).sort(
-    (a, b) => parseDayToUtcMs(a) - parseDayToUtcMs(b)
+function uniqByDayKeepLast(points: Point[]) {
+  const m = new Map<string, number>();
+  for (const p of points) m.set(p.d.slice(0, 10), p.v);
+  const days = Array.from(m.keys()).sort((a, b) => parseDayToUtcMs(a) - parseDayToUtcMs(b));
+  return days.map((d) => ({ d, v: m.get(d)! }));
+}
+
+function buildTimelineUnionDates(port: Point[], bench: Point[]) {
+  const pMap = new Map(port.map((x) => [x.d.slice(0, 10), x.v]));
+  const bMap = new Map(bench.map((x) => [x.d.slice(0, 10), x.v]));
+
+  const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
+    (a, c) => parseDayToUtcMs(a) - parseDayToUtcMs(c)
   );
 
-  let started = false;
+  let startedP = false;
   let lastP: number | null = null;
 
   return dates.map<ChartRow>((d) => {
-    if (pMap.has(d)) {
-      started = true;
-      lastP = pMap.get(d)!;
+    const rawP = pMap.has(d) ? (pMap.get(d) as number) : null;
+    const rawB = bMap.has(d) ? (bMap.get(d) as number) : null;
+
+    if (rawP != null) {
+      startedP = true;
+      lastP = rawP;
     }
-    return {
-      d,
-      p: started ? lastP : null,
-      b: bMap.get(d) ?? null,
-      b2: b2Map.get(d) ?? null,
-    };
+
+    return { d, p: startedP ? lastP : null, b: rawB };
   });
 }
 
-function rebaseTo100(rows: ChartRow[]) {
-  // find first date where all three exist (best)
-  const baseAll = rows.find((r) => r.p != null && r.b != null && r.b2 != null);
-  const base = baseAll ?? rows.find((r) => r.p != null && (r.b != null || r.b2 != null));
-  if (!base || base.p == null) return rows;
+function rebaseBothTo100(rows: ChartRow[]) {
+  const baseRow = rows.find((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
+  if (!baseRow) return rows;
 
-  const p0 = base.p;
-  const b0 = base.b ?? null;
-  const b20 = base.b2 ?? null;
+  const p0 = baseRow.p as number;
+  const b0 = baseRow.b as number;
+  if (!p0 || !b0) return rows;
 
   return rows.map((r) => ({
     d: r.d,
-    p: r.p == null ? null : (r.p / p0) * 100,
-    b: r.b == null || b0 == null ? null : (r.b / b0) * 100,
-    b2: r.b2 == null || b20 == null ? null : (r.b2 / b20) * 100,
+    p: r.p == null ? null : Number(((r.p / p0) * 100).toFixed(2)),
+    b: r.b == null ? null : Number(((r.b / b0) * 100).toFixed(2)),
   }));
 }
 
+// ✅ NEW: choose a tick style that falls back to 6M formatting when 1Y/ALL don’t actually have 1Y+ of data
+function tickStyleRange(requested: RangeKey, rows: ChartRowT[]): RangeKey {
+  if (rows.length < 2) return requested;
+
+  const first = rows[0]?.d;
+  const last = rows[rows.length - 1]?.d;
+  if (!first || !last) return requested;
+
+  const spanDays = daysBetweenISO(first, last);
+
+  // If user picked 1Y/ALL but data span is still short, format ticks like 6M
+  if ((requested === "1Y" || requested === "ALL") && spanDays < 240) {
+    return "6M";
+  }
+
+  return requested;
+}
+
 function makeTickFormatter(range: RangeKey) {
+  // For long ranges (month+year), we de-dupe repeated labels like "Oct 2025" "Oct 2025" "Oct 2025"
+  if (range === "1Y" || range === "ALL") {
+    let last = "";
+    return (ms: number) => {
+      const dt = new Date(ms);
+      if (!Number.isFinite(dt.getTime())) return "";
+
+      const lbl = dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", year: "numeric" });
+      if (lbl === last) return "";
+      last = lbl;
+      return lbl;
+    };
+  }
+
+  // Shorter ranges keep their normal formatting
   return (ms: number) => {
-    const d = new Date(ms);
-    if (range === "5D" || range === "1M" || range === "3M" || range === "6M") {
-      return d.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
+    const dt = new Date(ms);
+    if (!Number.isFinite(dt.getTime())) return "";
+
+    if (range === "5D") {
+      return dt.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short", month: "short", day: "2-digit" });
     }
-    return d.toLocaleDateString(undefined, { timeZone: TZ, month: "short", year: "numeric" });
+
+    // 1M/3M/6M use Month Day
+    return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
   };
 }
 
+
+function tooltipLabelFromMs(ms: number) {
+  const dt = new Date(ms);
+  if (!Number.isFinite(dt.getTime())) return "—";
+  return dt.toLocaleDateString(undefined, { timeZone: TZ, year: "numeric", month: "short", day: "2-digit" });
+}
+
+const fmtUSD = (n: number) =>
+  Number.isFinite(n) ? n.toLocaleString(undefined, { style: "currency", currency: "USD" }) : "—";
+
+const fmtPctFrom100 = (n: number) => (Number.isFinite(n) ? `${(n - 100).toFixed(2)}%` : "—");
+
+function intervalFor(range: RangeKey, len: number) {
+  if (len <= 2) return 0;
+  if (range === "5D") return 0;
+
+  const target =
+    range === "1M"
+      ? 10
+      : range === "3M"
+      ? 10
+      : range === "6M"
+      ? 7
+      : range === "1Y"
+      ? 12
+      : 16;
+
+  return Math.max(0, Math.ceil(len / target) - 1);
+}
+
 export default function EquityPreview({
-  height = 230,
+  height = 190,
   showControls = false,
   range: rangeProp,
   onRangeChange,
   onData,
-  mode = "index",
-  benchmarkMode = "voo_index",
-  secondaryBenchmarkMode = "qqq_index",
-  rebaseTo100: doRebase = true,
+  showSpy = true,
+  spySymbol = "SPY",
+  rebaseTo100 = true,
+
+  mode = "twr",
+  benchmarkMode,
+  secondaryBenchmarkMode,
 }: Props) {
+
   const [rangeState, setRangeState] = useState<RangeKey>("1Y");
   const range = rangeProp ?? rangeState;
 
   const setRange = (r: RangeKey) => {
     onRangeChange?.(r);
-    if (!rangeProp) setRangeState(r);
+    if (rangeProp === undefined) setRangeState(r);
   };
 
-  const [portRaw, setPortRaw] = useState<unknown>(null);
-  const [b1Raw, setB1Raw] = useState<unknown>(null);
-  const [b2Raw, setB2Raw] = useState<unknown>(null);
+  const [equityRemote, setEquityRemote] = useState<unknown>(null);
+  const [benchRemote, setBenchRemote] = useState<unknown>(null);
 
-  const lastSentRef = useRef("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [benchErr, setBenchErr] = useState<string | null>(null);
+
+  const lastSentRef = useRef<string>("");
 
   useEffect(() => {
     let alive = true;
-    const windowN = fetchWindow(range);
+    const pollMs = range === "5D" ? 15000 : 60000;
 
-    apiGet(`/api/portfolio/equity-curve?window=${windowN}&mode=${mode}`).then((j) => alive && setPortRaw(j));
-    apiGet(`/api/portfolio/equity-curve?window=${windowN}&mode=${benchmarkMode}`).then((j) => alive && setB1Raw(j));
-    apiGet(`/api/portfolio/equity-curve?window=${windowN}&mode=${secondaryBenchmarkMode}`).then((j) => alive && setB2Raw(j));
+    const tick = async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+        const windowN = fetchWindow(range);
 
+        // ✅ IMPORTANT: this should already be mode=index in your new performance index view
+        const json = await apiGet<unknown>(
+          `/api/portfolio/equity-curve?window=${encodeURIComponent(String(windowN))}&mode=index&max_age_sec=60`
+        );
+
+        if (!alive) return;
+        setEquityRemote(json);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load equity");
+        setEquityRemote(null);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+
+    tick();
+    const t = window.setInterval(tick, pollMs);
     return () => {
       alive = false;
+      window.clearInterval(t);
     };
-  }, [range, mode, benchmarkMode, secondaryBenchmarkMode]);
-
-  const portPts = useMemo(() => uniqByDayKeepLast(normalizeSeries(portRaw)), [portRaw]);
-  const b1Pts = useMemo(() => uniqByDayKeepLast(normalizeSeries(b1Raw)), [b1Raw]);
-  const b2Pts = useMemo(() => uniqByDayKeepLast(normalizeSeries(b2Raw)), [b2Raw]);
-
-  const chartData = useMemo<ChartRowT[]>(() => {
-    if (!portPts.length) return [];
-
-    const timeline = buildTimeline(portPts, b1Pts, b2Pts);
-    const need = desiredPoints(range);
-    const sliced = timeline.length > need ? timeline.slice(timeline.length - need) : timeline;
-
-    const rebased = doRebase ? rebaseTo100(sliced) : sliced;
-
-    return rebased.map((r) => ({
-      d: r.d,
-      t: parseDayToUtcMs(r.d),
-      p: r.p,
-      b: r.b,
-      b2: r.b2,
-    }));
-  }, [portPts, b1Pts, b2Pts, range, doRebase]);
+  }, [range]);
 
   useEffect(() => {
-    if (!onData || !portPts.length) return;
-    const last = portPts[portPts.length - 1];
-    const key = `${portPts.length}:${last.d}:${last.v.toFixed(6)}`;
+    if (!showSpy) {
+      setBenchRemote(null);
+      setBenchErr(null);
+      return;
+    }
+
+    let alive = true;
+    const pollMs = range === "5D" ? 15000 : 60000;
+
+    const tick = async () => {
+      try {
+        setBenchErr(null);
+        const sym = (spySymbol || "SPY").trim().toUpperCase();
+        const apiRange = apiRangeForBenchmark(range);
+        const json = await apiGet<unknown>(
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(apiRange)}&max_age_sec=60`
+        );
+        if (!alive) return;
+        setBenchRemote(json);
+      } catch (e: any) {
+        if (!alive) return;
+        setBenchErr(e?.message ?? "Failed to load benchmark");
+        setBenchRemote(null);
+      }
+    };
+
+    tick();
+    const t = window.setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [range, showSpy, spySymbol]);
+
+  const eqPoints = useMemo(() => uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote))), [equityRemote]);
+
+  const chartData = useMemo<ChartRowT[]>(() => {
+    const eq = eqPoints;
+    const bench = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(benchRemote)));
+
+    if (eq.length === 0) return [];
+
+    const timeline = buildTimelineUnionDates(eq, showSpy && !benchErr ? bench : []);
+
+    const need = Math.min(timeline.length, desiredPoints(range));
+    const sliced = timeline.length > need ? timeline.slice(timeline.length - need) : timeline;
+
+    if (sliced.length < 2) return [];
+
+    const hasOverlap = sliced.some((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
+    const rebased = rebaseTo100 && showSpy && !benchErr && bench.length && hasOverlap ? rebaseBothTo100(sliced) : sliced;
+
+    return rebased
+      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b }))
+      .filter((r) => Number.isFinite(r.t))
+      .sort((a, b) => a.t - b.t);
+  }, [eqPoints, benchRemote, range, rebaseTo100, showSpy, benchErr]);
+
+  useEffect(() => {
+    if (!onData) return;
+
+    const last = eqPoints.length ? eqPoints[eqPoints.length - 1] : null;
+    const key = `${eqPoints.length}:${last?.d ?? ""}:${last && Number.isFinite(last.v) ? last.v.toFixed(6) : "x"}`;
+
     if (lastSentRef.current === key) return;
     lastSentRef.current = key;
-    onData(portPts);
-  }, [portPts, onData]);
 
-  const tickFormatter = useMemo(() => makeTickFormatter(range), [range]);
+    onData(eqPoints);
+  }, [eqPoints, onData]);
+
+  // ✅ NEW: tick styling falls back to 6M formatting if 1Y/ALL doesn’t have the span yet
+  const tickStyle = useMemo(() => tickStyleRange(range, chartData), [range, chartData]);
+  const tickFormatter = useMemo(() => makeTickFormatter(tickStyle), [tickStyle]);
+  const xInterval = useMemo(() => intervalFor(tickStyle, chartData.length), [tickStyle, chartData.length]);
+
+  const tooltipFmt = rebaseTo100 && showSpy && !benchErr ? fmtPctFrom100 : fmtUSD;
+
+  if (loading && chartData.length === 0) {
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Loading…</div>;
+  }
+  if (err && chartData.length === 0) {
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Failed: {err}</div>;
+  }
+  if (chartData.length === 0) {
+    return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>No equity data.</div>;
+  }
 
   return (
     <div>
@@ -203,9 +381,14 @@ export default function EquityPreview({
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
           {(["5D", "1M", "3M", "6M", "1Y", "ALL"] as RangeKey[]).map((r) => (
             <button key={r} type="button" onClick={() => setRange(r)} style={btn(range === r)}>
-              {r === "ALL" ? "5Y" : r}
+              {r}
             </button>
           ))}
+          {showSpy && (
+            <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
+              {benchErr ? "Benchmark: S&P 500 (off)" : "Benchmark: S&P 500"}
+            </div>
+          )}
         </div>
       )}
 
@@ -219,26 +402,23 @@ export default function EquityPreview({
             dataKey="t"
             axisLine={false}
             tickLine={false}
+            interval={xInterval as any}
+            minTickGap={12}
             tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
             tickFormatter={tickFormatter as any}
             domain={["dataMin", "dataMax"]}
             padding={{ left: 6, right: 10 }}
+            allowDataOverflow
             tickMargin={10}
             height={24}
           />
 
           <Tooltip
-            labelFormatter={(label) => {
-              const dt = new Date(Number(label));
-              return Number.isFinite(dt.getTime())
-                ? dt.toLocaleDateString(undefined, { timeZone: TZ, year: "numeric", month: "short", day: "2-digit" })
-                : "—";
-            }}
+            labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
             formatter={(value, name) => {
               const n = Number(value);
-              const labelName =
-                name === "p" ? "Portfolio" : name === "b" ? "VOO" : "QQQ";
-              return [Number.isFinite(n) ? n.toFixed(2) : "—", labelName];
+              const labelName = name === "p" ? "Portfolio" : "S&P 500";
+              return [tooltipFmt(n), labelName];
             }}
             contentStyle={{
               background: "rgba(10,12,18,0.92)",
@@ -249,17 +429,31 @@ export default function EquityPreview({
             labelStyle={{ color: "rgba(255,255,255,0.65)" }}
           />
 
-          <Line type="monotone" dataKey="p" stroke="rgba(110,160,255,0.9)" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls />
-          <Line type="monotone" dataKey="b" stroke="rgba(255,255,255,0.45)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
-          <Line type="monotone" dataKey="b2" stroke="rgba(130,255,180,0.55)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+          <Line
+            type="monotone"
+            dataKey="p"
+            stroke="rgba(110,160,255,0.9)"
+            strokeWidth={2.5}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls
+          />
+
+          {showSpy && !benchErr && (
+            <Line
+              type="monotone"
+              dataKey="b"
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
 
-      {doRebase && (
-        <div style={{ fontSize: 11, opacity: 0.65, marginTop: 6 }}>
-          Rebasing enabled (start = 100) using first shared date.
-        </div>
-      )}
+      {/* ✅ REMOVED: "Rebasing enabled..." message */}
     </div>
   );
 }
