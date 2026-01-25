@@ -15,23 +15,22 @@ type Props = {
   onRangeChange?: (r: RangeKey) => void;
   onData?: (points: Point[]) => void;
 
-  // existing benchmark toggle (you can keep this)
+  // existing benchmark toggle (legacy)
   showSpy?: boolean;
   spySymbol?: string;
 
   // rebasing
   rebaseTo100?: boolean;
 
-  // ✅ ADD THESE
-  mode?: Mode;                    // drives the portfolio series (default: "twr" or "equity" — your choice)
-  benchmarkMode?: Mode;           // drives the benchmark series (ex: "voo_index")
-  secondaryBenchmarkMode?: Mode;  // optional 2nd benchmark (ex: "qqq_index")
+  // new modes
+  mode?: Mode;
+  benchmarkMode?: Mode; // ex: "voo_index"
+  secondaryBenchmarkMode?: Mode; // ex: "qqq_index"
 };
 
-
 type Point = { d: string; v: number };
-type ChartRow = { d: string; p: number | null; b: number | null };
-type ChartRowT = { d: string; t: number; p: number | null; b: number | null };
+type ChartRow = { d: string; p: number | null; b: number | null; b2: number | null };
+type ChartRowT = { d: string; t: number; p: number | null; b: number | null; b2: number | null };
 
 const TZ = "America/Chicago";
 
@@ -105,11 +104,12 @@ function uniqByDayKeepLast(points: Point[]) {
   return days.map((d) => ({ d, v: m.get(d)! }));
 }
 
-function buildTimelineUnionDates(port: Point[], bench: Point[]) {
+function buildTimelineUnionDates(port: Point[], bench1: Point[], bench2: Point[]) {
   const pMap = new Map(port.map((x) => [x.d.slice(0, 10), x.v]));
-  const bMap = new Map(bench.map((x) => [x.d.slice(0, 10), x.v]));
+  const b1Map = new Map(bench1.map((x) => [x.d.slice(0, 10), x.v]));
+  const b2Map = new Map(bench2.map((x) => [x.d.slice(0, 10), x.v]));
 
-  const dates = Array.from(new Set([...pMap.keys(), ...bMap.keys()])).sort(
+  const dates = Array.from(new Set([...pMap.keys(), ...b1Map.keys(), ...b2Map.keys()])).sort(
     (a, c) => parseDayToUtcMs(a) - parseDayToUtcMs(c)
   );
 
@@ -118,33 +118,39 @@ function buildTimelineUnionDates(port: Point[], bench: Point[]) {
 
   return dates.map<ChartRow>((d) => {
     const rawP = pMap.has(d) ? (pMap.get(d) as number) : null;
-    const rawB = bMap.has(d) ? (bMap.get(d) as number) : null;
+    const rawB = b1Map.has(d) ? (b1Map.get(d) as number) : null;
+    const rawB2 = b2Map.has(d) ? (b2Map.get(d) as number) : null;
 
     if (rawP != null) {
       startedP = true;
       lastP = rawP;
     }
 
-    return { d, p: startedP ? lastP : null, b: rawB };
+    return { d, p: startedP ? lastP : null, b: rawB, b2: rawB2 };
   });
 }
 
-function rebaseBothTo100(rows: ChartRow[]) {
-  const baseRow = rows.find((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
+function rebaseTo100(rows: ChartRow[]) {
+  const baseRow = rows.find(
+    (r) => Number.isFinite(r.p ?? NaN) && (Number.isFinite(r.b ?? NaN) || Number.isFinite(r.b2 ?? NaN))
+  );
   if (!baseRow) return rows;
 
   const p0 = baseRow.p as number;
-  const b0 = baseRow.b as number;
-  if (!p0 || !b0) return rows;
+  if (!p0) return rows;
+
+  const b0 = Number.isFinite(baseRow.b ?? NaN) ? (baseRow.b as number) : null;
+  const b20 = Number.isFinite(baseRow.b2 ?? NaN) ? (baseRow.b2 as number) : null;
 
   return rows.map((r) => ({
     d: r.d,
     p: r.p == null ? null : Number(((r.p / p0) * 100).toFixed(2)),
-    b: r.b == null ? null : Number(((r.b / b0) * 100).toFixed(2)),
+    b: r.b == null || b0 == null ? null : Number(((r.b / b0) * 100).toFixed(2)),
+    b2: r.b2 == null || b20 == null ? null : Number(((r.b2 / b20) * 100).toFixed(2)),
   }));
 }
 
-// ✅ NEW: choose a tick style that falls back to 6M formatting when 1Y/ALL don’t actually have 1Y+ of data
+// If user picked 1Y/ALL but data span is still short, format ticks like 6M
 function tickStyleRange(requested: RangeKey, rows: ChartRowT[]): RangeKey {
   if (rows.length < 2) return requested;
 
@@ -153,23 +159,17 @@ function tickStyleRange(requested: RangeKey, rows: ChartRowT[]): RangeKey {
   if (!first || !last) return requested;
 
   const spanDays = daysBetweenISO(first, last);
-
-  // If user picked 1Y/ALL but data span is still short, format ticks like 6M
-  if ((requested === "1Y" || requested === "ALL") && spanDays < 240) {
-    return "6M";
-  }
-
+  if ((requested === "1Y" || requested === "ALL") && spanDays < 240) return "6M";
   return requested;
 }
 
 function makeTickFormatter(range: RangeKey) {
-  // For long ranges (month+year), we de-dupe repeated labels like "Oct 2025" "Oct 2025" "Oct 2025"
+  // month+year ranges: de-dupe "Oct 2025" repeats
   if (range === "1Y" || range === "ALL") {
     let last = "";
     return (ms: number) => {
       const dt = new Date(ms);
       if (!Number.isFinite(dt.getTime())) return "";
-
       const lbl = dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", year: "numeric" });
       if (lbl === last) return "";
       last = lbl;
@@ -177,7 +177,6 @@ function makeTickFormatter(range: RangeKey) {
     };
   }
 
-  // Shorter ranges keep their normal formatting
   return (ms: number) => {
     const dt = new Date(ms);
     if (!Number.isFinite(dt.getTime())) return "";
@@ -190,7 +189,6 @@ function makeTickFormatter(range: RangeKey) {
     return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
   };
 }
-
 
 function tooltipLabelFromMs(ms: number) {
   const dt = new Date(ms);
@@ -207,18 +205,14 @@ function intervalFor(range: RangeKey, len: number) {
   if (len <= 2) return 0;
   if (range === "5D") return 0;
 
-  const target =
-    range === "1M"
-      ? 10
-      : range === "3M"
-      ? 10
-      : range === "6M"
-      ? 7
-      : range === "1Y"
-      ? 12
-      : 16;
-
+  const target = range === "1M" ? 10 : range === "3M" ? 10 : range === "6M" ? 7 : range === "1Y" ? 12 : 16;
   return Math.max(0, Math.ceil(len / target) - 1);
+}
+
+function symbolFromMode(mode: Mode | undefined, fallback: string) {
+  if (mode === "voo_index") return "VOO";
+  if (mode === "qqq_index") return "QQQ";
+  return fallback;
 }
 
 export default function EquityPreview({
@@ -229,13 +223,11 @@ export default function EquityPreview({
   onData,
   showSpy = true,
   spySymbol = "SPY",
-  rebaseTo100 = true,
-
+  rebaseTo100: rebaseFlag = true,
   mode = "twr",
   benchmarkMode,
   secondaryBenchmarkMode,
 }: Props) {
-
   const [rangeState, setRangeState] = useState<RangeKey>("1Y");
   const range = rangeProp ?? rangeState;
 
@@ -245,14 +237,19 @@ export default function EquityPreview({
   };
 
   const [equityRemote, setEquityRemote] = useState<unknown>(null);
+
   const [benchRemote, setBenchRemote] = useState<unknown>(null);
+  const [benchErr, setBenchErr] = useState<string | null>(null);
+
+  const [bench2Remote, setBench2Remote] = useState<unknown>(null);
+  const [bench2Err, setBench2Err] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [benchErr, setBenchErr] = useState<string | null>(null);
 
   const lastSentRef = useRef<string>("");
 
+  // ---- portfolio series ----
   useEffect(() => {
     let alive = true;
     const pollMs = range === "5D" ? 15000 : 60000;
@@ -263,9 +260,11 @@ export default function EquityPreview({
         setErr(null);
         const windowN = fetchWindow(range);
 
-        // ✅ IMPORTANT: this should already be mode=index in your new performance index view
+        // Use mode prop (your Performance page passes mode="index")
         const json = await apiGet<unknown>(
-          `/api/portfolio/equity-curve?window=${encodeURIComponent(String(windowN))}&mode=index&max_age_sec=60`
+          `/api/portfolio/equity-curve?window=${encodeURIComponent(String(windowN))}&mode=${encodeURIComponent(
+            mode
+          )}&max_age_sec=60`
         );
 
         if (!alive) return;
@@ -285,8 +284,9 @@ export default function EquityPreview({
       alive = false;
       window.clearInterval(t);
     };
-  }, [range]);
+  }, [range, mode]);
 
+  // ---- benchmark 1 (VOO in your Performance card) ----
   useEffect(() => {
     if (!showSpy) {
       setBenchRemote(null);
@@ -300,11 +300,16 @@ export default function EquityPreview({
     const tick = async () => {
       try {
         setBenchErr(null);
-        const sym = (spySymbol || "SPY").trim().toUpperCase();
+
+        const sym = symbolFromMode(benchmarkMode, (spySymbol || "SPY").trim().toUpperCase());
         const apiRange = apiRangeForBenchmark(range);
+
         const json = await apiGet<unknown>(
-          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(apiRange)}&max_age_sec=60`
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(
+            apiRange
+          )}&max_age_sec=60`
         );
+
         if (!alive) return;
         setBenchRemote(json);
       } catch (e: any) {
@@ -320,32 +325,82 @@ export default function EquityPreview({
       alive = false;
       window.clearInterval(t);
     };
-  }, [range, showSpy, spySymbol]);
+  }, [range, showSpy, spySymbol, benchmarkMode]);
+
+  // ---- benchmark 2 (QQQ) ----
+  useEffect(() => {
+    if (!secondaryBenchmarkMode) {
+      setBench2Remote(null);
+      setBench2Err(null);
+      return;
+    }
+
+    let alive = true;
+    const pollMs = range === "5D" ? 15000 : 60000;
+
+    const tick = async () => {
+      try {
+        setBench2Err(null);
+
+        const sym = symbolFromMode(secondaryBenchmarkMode, "QQQ");
+        const apiRange = apiRangeForBenchmark(range);
+
+        const json = await apiGet<unknown>(
+          `/api/benchmark/price-series?symbol=${encodeURIComponent(sym)}&range=${encodeURIComponent(
+            apiRange
+          )}&max_age_sec=60`
+        );
+
+        if (!alive) return;
+        setBench2Remote(json);
+      } catch (e: any) {
+        if (!alive) return;
+        setBench2Err(e?.message ?? "Failed to load 2nd benchmark");
+        setBench2Remote(null);
+      }
+    };
+
+    tick();
+    const t = window.setInterval(tick, pollMs);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [range, secondaryBenchmarkMode]);
 
   const eqPoints = useMemo(() => uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote))), [equityRemote]);
 
   const chartData = useMemo<ChartRowT[]>(() => {
     const eq = eqPoints;
-    const bench = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(benchRemote)));
+
+    const bench1 = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(benchRemote)));
+    const bench2 = uniqByDayKeepLast(sortByDate(normalizeSeriesClose(bench2Remote)));
 
     if (eq.length === 0) return [];
 
-    const timeline = buildTimelineUnionDates(eq, showSpy && !benchErr ? bench : []);
+    const useB1 = showSpy && !benchErr ? bench1 : [];
+    const useB2 = secondaryBenchmarkMode && !bench2Err ? bench2 : [];
+
+    const timeline = buildTimelineUnionDates(eq, useB1, useB2);
 
     const need = Math.min(timeline.length, desiredPoints(range));
     const sliced = timeline.length > need ? timeline.slice(timeline.length - need) : timeline;
 
     if (sliced.length < 2) return [];
 
-    const hasOverlap = sliced.some((r) => Number.isFinite(r.p ?? NaN) && Number.isFinite(r.b ?? NaN));
-    const rebased = rebaseTo100 && showSpy && !benchErr && bench.length && hasOverlap ? rebaseBothTo100(sliced) : sliced;
+    const hasAnyOverlap = sliced.some(
+      (r) => Number.isFinite(r.p ?? NaN) && (Number.isFinite(r.b ?? NaN) || Number.isFinite(r.b2 ?? NaN))
+    );
+
+    const rebased = rebaseFlag && hasAnyOverlap ? rebaseTo100(sliced) : sliced;
 
     return rebased
-      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b }))
+      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b, b2: r.b2 }))
       .filter((r) => Number.isFinite(r.t))
       .sort((a, b) => a.t - b.t);
-  }, [eqPoints, benchRemote, range, rebaseTo100, showSpy, benchErr]);
+  }, [eqPoints, benchRemote, bench2Remote, range, rebaseFlag, showSpy, benchErr, bench2Err, secondaryBenchmarkMode]);
 
+  // send portfolio points back to parent
   useEffect(() => {
     if (!onData) return;
 
@@ -358,12 +413,18 @@ export default function EquityPreview({
     onData(eqPoints);
   }, [eqPoints, onData]);
 
-  // ✅ NEW: tick styling falls back to 6M formatting if 1Y/ALL doesn’t have the span yet
+  // ticks
   const tickStyle = useMemo(() => tickStyleRange(range, chartData), [range, chartData]);
   const tickFormatter = useMemo(() => makeTickFormatter(tickStyle), [tickStyle]);
   const xInterval = useMemo(() => intervalFor(tickStyle, chartData.length), [tickStyle, chartData.length]);
 
-  const tooltipFmt = rebaseTo100 && showSpy && !benchErr ? fmtPctFrom100 : fmtUSD;
+  const tooltipFmt = rebaseFlag ? fmtPctFrom100 : fmtUSD;
+
+  const bench1Label = useMemo(() => symbolFromMode(benchmarkMode, (spySymbol || "SPY").trim().toUpperCase()), [
+    benchmarkMode,
+    spySymbol,
+  ]);
+  const bench2Label = useMemo(() => symbolFromMode(secondaryBenchmarkMode, "QQQ"), [secondaryBenchmarkMode]);
 
   if (loading && chartData.length === 0) {
     return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Loading…</div>;
@@ -386,7 +447,7 @@ export default function EquityPreview({
           ))}
           {showSpy && (
             <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
-              {benchErr ? "Benchmark: S&P 500 (off)" : "Benchmark: S&P 500"}
+              {benchErr ? `Benchmark: ${bench1Label} (off)` : `Benchmark: ${bench1Label}`}
             </div>
           )}
         </div>
@@ -417,7 +478,8 @@ export default function EquityPreview({
             labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
             formatter={(value, name) => {
               const n = Number(value);
-              const labelName = name === "p" ? "Portfolio" : "S&P 500";
+              const labelName =
+                name === "p" ? "Portfolio" : name === "b" ? bench1Label : name === "b2" ? bench2Label : String(name);
               return [tooltipFmt(n), labelName];
             }}
             contentStyle={{
@@ -450,10 +512,22 @@ export default function EquityPreview({
               connectNulls
             />
           )}
+
+          {secondaryBenchmarkMode && !bench2Err && (
+            <Line
+              type="monotone"
+              dataKey="b2"
+              stroke="rgba(120,220,170,0.55)"
+              strokeWidth={2}
+              dot={false}
+              isAnimationActive={false}
+              connectNulls
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
 
-      {/* ✅ REMOVED: "Rebasing enabled..." message */}
+      {/* Rebasing note removed */}
     </div>
   );
 }

@@ -5,14 +5,13 @@ import styles from "./PerformanceChartCard.module.css";
 import EquityPreview from "@/componets/UI/EquityPreview/EquityPreview";
 
 type EquityPoint = { d: string; v: number };
-type RangeKey = "5D" | "1M" |"3M" | "6M" | "1Y" | "ALL";
+type RangeKey = "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
 
 function pctPtsStr(x: number | null | undefined): string {
   if (typeof x !== "number" || !Number.isFinite(x)) return "—";
   return `${x.toFixed(2)}%`;
 }
 
-// lookback here is "trading points back" (approx), not calendar days
 function perfFromLookback(points: EquityPoint[], lookbackPoints: number): number | null {
   if (points.length < lookbackPoints + 1) return null;
 
@@ -58,7 +57,6 @@ export default function PerformanceChartCard() {
     setUpdatedOn(last?.d ?? "—");
   }, []);
 
-  // 5 trading days, 21 trading days (~1M), 63 trading days (~3M)
   const perf5D = useMemo(() => perfFromLookback(points, 5), [points]);
   const perf1M = useMemo(() => perfFromLookback(points, 21), [points]);
   const perf3M = useMemo(() => perfFromLookback(points, 63), [points]);
