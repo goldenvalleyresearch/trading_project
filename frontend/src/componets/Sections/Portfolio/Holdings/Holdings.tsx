@@ -31,7 +31,11 @@ function pick(p: any, key: string, altKeys?: string[]) {
 
 function fmtMoney2(x: number) {
   if (!Number.isFinite(x)) return "—";
-  return x.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  return x.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  });
 }
 
 function fmtPrice(x: number) {
@@ -52,8 +56,6 @@ function gainDirClass(v: number) {
 function gainLevelClassFromDollar(d: number) {
   if (!Number.isFinite(d) || d === 0) return styles.gainL0;
   const a = Math.abs(d);
-
-  // $ tranches: 0–25, 25–50, 50–75, 75+
   if (a < 25) return styles.gainL1;
   if (a < 50) return styles.gainL2;
   if (a < 75) return styles.gainL3;
@@ -63,13 +65,11 @@ function gainLevelClassFromDollar(d: number) {
 function gainLevelClassFromPct(pctDecimal: number) {
   if (!Number.isFinite(pctDecimal) || pctDecimal === 0) return styles.gainL0;
   const aPct = Math.abs(pctDecimal * 100);
-
-  // % tranches: 0–5, 5–10, 10–15, 15–20, 20+
   if (aPct < 5) return styles.gainL1;
   if (aPct < 10) return styles.gainL2;
   if (aPct < 15) return styles.gainL3;
   if (aPct < 20) return styles.gainL3;
-  return styles.gainL4; // 20%+ max
+  return styles.gainL4;
 }
 
 function gainClassDollar(d: number) {
@@ -84,7 +84,6 @@ function toISODate(x: any): string | null {
   if (!x) return null;
   const s = String(x).trim();
   if (!s) return null;
-  // accept "YYYY-MM-DD" or ISO
   const d = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + "T12:00:00Z") : new Date(s);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toISOString().slice(0, 10);
@@ -94,8 +93,7 @@ function daysBetweenUTC(aISO: string, bISO: string) {
   const a = new Date(aISO + "T00:00:00Z").getTime();
   const b = new Date(bISO + "T00:00:00Z").getTime();
   if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
-  const diff = Math.floor((b - a) / (24 * 3600 * 1000));
-  return diff;
+  return Math.floor((b - a) / (24 * 3600 * 1000));
 }
 
 function normalizeRows(rows: Holding[]) {
@@ -104,26 +102,21 @@ function normalizeRows(rows: Holding[]) {
     const qtyRaw = pick(p, "qty", ["quantity"]);
     const qty = parseMoneyLike(qtyRaw);
 
-    // Market value from snapshot / API
     const mvRaw = pick(p, "market_value", ["value", "marketValue"]);
     const marketValue = parseMoneyLike(mvRaw);
 
-    // Total cost basis
     const costValueRaw = pick(p, "cost_value", ["costValue", "cost_basis_total", "costBasisTotal"]);
     const costValue = parseMoneyLike(costValueRaw);
 
-    // Avg cost
     const avgCostRaw = pick(p, "avg_cost", ["avg", "avgCost", "avg_cost_basis", "avgCostBasis"]);
     const avgCost = parseMoneyLike(avgCostRaw);
 
-    // Current price preference: live fields first, then snapshot
     const livePriceRaw = pick(p, "current_price", ["live_price", "polygon_price", "last_trade_price"]);
     const snapPriceRaw = pick(p, "last_price", ["price"]);
     const currentPrice = Number.isFinite(parseMoneyLike(livePriceRaw))
       ? parseMoneyLike(livePriceRaw)
       : parseMoneyLike(snapPriceRaw);
 
-    // Opened date
     const openedAtISO =
       toISODate(p.opened_at) ??
       toISODate(p.first_seen) ??
@@ -131,11 +124,11 @@ function normalizeRows(rows: Holding[]) {
       toISODate(p.firstOwnedAt) ??
       null;
 
-    // ✅ backend days_held
+    // ✅ Prefer backend days_held
     const daysHeldRaw = pick(p, "days_held", ["daysHeld"]);
     const daysHeld = parseMoneyLike(daysHeldRaw);
 
-    // as_of might exist on row in some older shapes; otherwise null
+    // (rarely present per-row) snapshot date
     const asOfISO = toISODate(p.as_of) ?? null;
 
     const isCash = String(symbol).includes("*");
@@ -164,30 +157,22 @@ export default function Holdings({ rows }: Props) {
 
   const hasRows = all.length > 0;
 
-  // Portfolio net value for weight calc (sum of market values; includes cash positions)
+  // ✅ This is your “current market balance” (includes cash)
   const netValue = all.reduce((acc, p) => acc + (Number.isFinite(p.__mv) ? p.__mv : 0), 0);
 
-  // ✅ Totals for equities only (open positions)
-  const totals = equities.reduce(
-    (acc: { mvSum: number; costSum: number; dollarGainSum: number }, p: any) => {
-      const mv = p.__mv;
-      const cost = p.__cost;
+  // ✅ totals for OPEN positions only (equities)
+  const totalOpenDollarGain = equities.reduce((acc, p) => {
+    const mv = p.__mv;
+    const cost = p.__cost;
+    const dg = Number.isFinite(mv) && Number.isFinite(cost) ? mv - cost : NaN;
+    return acc + (Number.isFinite(dg) ? dg : 0);
+  }, 0);
 
-      if (Number.isFinite(mv)) acc.mvSum += mv;
-      if (Number.isFinite(cost)) acc.costSum += cost;
-
-      if (Number.isFinite(mv) && Number.isFinite(cost)) {
-        acc.dollarGainSum += (mv - cost);
-      }
-      return acc;
-    },
-    { mvSum: 0, costSum: 0, dollarGainSum: 0 }
-  );
-
-  const totalDollarGain = totals.dollarGainSum;
-  const totalPctGain = Number.isFinite(totalDollarGain) && Number.isFinite(netValue) && netValue !== 0
-    ? totalDollarGain / netValue
-    : NaN;
+  // ✅ total % = open $ gain ÷ total portfolio net value (includes cash)
+  const totalOpenPctGain =
+    Number.isFinite(totalOpenDollarGain) && Number.isFinite(netValue) && netValue !== 0
+      ? totalOpenDollarGain / netValue
+      : NaN;
 
   return (
     <>
@@ -230,22 +215,22 @@ export default function Holdings({ rows }: Props) {
                     const mv = p.__mv;
                     const cost = p.__cost;
 
-                    // cost/share: prefer avg_cost; else cost_value / qty
                     const costPerShare = Number.isFinite(p.__avg)
                       ? p.__avg
                       : Number.isFinite(cost) && Number.isFinite(qty) && qty !== 0
-                        ? cost / qty
-                        : NaN;
+                      ? cost / qty
+                      : NaN;
 
                     const curPx = p.__currentPrice;
 
-                    // gains: use market value - cost basis total when available
                     const dollarGain = Number.isFinite(mv) && Number.isFinite(cost) ? mv - cost : NaN;
-                    const pctGain = Number.isFinite(dollarGain) && Number.isFinite(cost) && cost !== 0 ? dollarGain / cost : NaN;
+                    const pctGain =
+                      Number.isFinite(dollarGain) && Number.isFinite(cost) && cost !== 0 ? dollarGain / cost : NaN;
 
-                    const weight = Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
+                    const weight =
+                      Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
 
-                    // days held: ✅ prefer backend days_held; fallback to opened_at calc
+                    // ✅ Days held: trust backend first
                     const opened = p.__openedAtISO;
                     const asOf = p.__asOfISO;
                     const todayISO = new Date().toISOString().slice(0, 10);
@@ -272,24 +257,18 @@ export default function Holdings({ rows }: Props) {
                     );
                   })}
 
-                  {/* ✅ Totals row for open positions (equities only) */}
-                  {equities.length > 0 && (
-                    <tr className={styles.sectionRow}>
-                      <td className={styles.sectionCell}>Totals (open positions)</td>
-                      <td className={styles.num}></td>
-                      <td className={styles.num}></td>
-                      <td className={styles.num}></td>
-                      <td className={styles.num}></td>
-                      <td className={styles.num}></td>
-                      <td className={styles.num}></td>
-                      <td className={`${styles.num} ${gainClassDollar(totalDollarGain)}`}>
-                        {fmtMoney2(totalDollarGain)}
-                      </td>
-                      <td className={`${styles.num} ${gainClassPct(totalPctGain)}`}>
-                        {fmtPct(totalPctGain)}
-                      </td>
-                    </tr>
-                  )}
+                  {/* ✅ Totals row for open positions */}
+                  <tr className={styles.sectionRow}>
+                    <td colSpan={7} className={styles.sectionCell}>
+                      Totals (open positions)
+                    </td>
+                    <td className={`${styles.num} ${gainClassDollar(totalOpenDollarGain)}`}>
+                      {fmtMoney2(totalOpenDollarGain)}
+                    </td>
+                    <td className={`${styles.num} ${gainClassPct(totalOpenPctGain)}`}>
+                      {fmtPct(totalOpenPctGain)}
+                    </td>
+                  </tr>
 
                   {cash.length > 0 && (
                     <>
@@ -302,7 +281,8 @@ export default function Holdings({ rows }: Props) {
                       {cash.map((p: any, idx: number) => {
                         const qty = p.__qty;
                         const mv = p.__mv;
-                        const weight = Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
+                        const weight =
+                          Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
 
                         return (
                           <tr key={`${p.symbol}-${idx}`} className={styles.cashRow}>
@@ -346,23 +326,22 @@ export default function Holdings({ rows }: Props) {
               <MobileRow key={`${p.symbol}-${idx}`} p={p} netValue={netValue} />
             ))}
 
-            {/* ✅ Totals pill row (mobile) */}
-            {equities.length > 0 && (
-              <div className={styles.mobileRow}>
-                <div className={styles.mobileTopLine}>
-                  <div className={styles.mobileSym}>Totals (open)</div>
-                  <div className={`${styles.mobileValue} ${gainClassDollar(totalDollarGain)}`}>
-                    {fmtMoney2(totalDollarGain)}
-                  </div>
-                </div>
-                <div className={styles.mobileMeta}>
-                  <div className={styles.mobilePill}>
-                    <span className={styles.mobileK}>% Gain</span>
-                    <span className={`${styles.mobileV} ${gainClassPct(totalPctGain)}`}>{fmtPct(totalPctGain)}</span>
-                  </div>
+            {/* ✅ Mobile totals */}
+            <div className={styles.mobileSection}>Totals (open positions)</div>
+            <div className={styles.mobileRow}>
+              <div className={styles.mobileTopLine}>
+                <div className={styles.mobileSym}>OPEN P&amp;L</div>
+                <div className={`${styles.mobileValue} ${gainClassDollar(totalOpenDollarGain)}`}>
+                  {fmtMoney2(totalOpenDollarGain)}
                 </div>
               </div>
-            )}
+              <div className={styles.mobileMeta}>
+                <div className={styles.mobilePill}>
+                  <span className={styles.mobileK}>% (vs net)</span>
+                  <span className={`${styles.mobileV} ${gainClassPct(totalOpenPctGain)}`}>{fmtPct(totalOpenPctGain)}</span>
+                </div>
+              </div>
+            </div>
 
             {cash.length > 0 && <div className={styles.mobileSection}>Cash & sweep</div>}
             {cash.map((p: any, idx: number) => (
@@ -383,8 +362,8 @@ function MobileRow({ p, netValue, isCash }: { p: any; netValue: number; isCash?:
   const costPerShare = Number.isFinite(p.__avg)
     ? p.__avg
     : Number.isFinite(cost) && Number.isFinite(qty) && qty !== 0
-      ? cost / qty
-      : NaN;
+    ? cost / qty
+    : NaN;
 
   const curPx = p.__currentPrice;
 
@@ -397,7 +376,6 @@ function MobileRow({ p, netValue, isCash }: { p: any; netValue: number; isCash?:
   const asOf = p.__asOfISO;
   const todayISO = new Date().toISOString().slice(0, 10);
 
-  // ✅ prefer backend days_held
   const daysHeld =
     Number.isFinite(p.__daysHeld)
       ? p.__daysHeld
