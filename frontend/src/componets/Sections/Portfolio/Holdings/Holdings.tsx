@@ -56,6 +56,7 @@ function gainDirClass(v: number) {
 function gainLevelClassFromDollar(d: number) {
   if (!Number.isFinite(d) || d === 0) return styles.gainL0;
   const a = Math.abs(d);
+
   if (a < 25) return styles.gainL1;
   if (a < 50) return styles.gainL2;
   if (a < 75) return styles.gainL3;
@@ -65,6 +66,7 @@ function gainLevelClassFromDollar(d: number) {
 function gainLevelClassFromPct(pctDecimal: number) {
   if (!Number.isFinite(pctDecimal) || pctDecimal === 0) return styles.gainL0;
   const aPct = Math.abs(pctDecimal * 100);
+
   if (aPct < 5) return styles.gainL1;
   if (aPct < 10) return styles.gainL2;
   if (aPct < 15) return styles.gainL3;
@@ -99,6 +101,7 @@ function daysBetweenUTC(aISO: string, bISO: string) {
 function normalizeRows(rows: Holding[]) {
   return (rows ?? []).map((p: any) => {
     const symbol = String(p.symbol ?? p.ticker ?? "").trim() || "—";
+
     const qtyRaw = pick(p, "qty", ["quantity"]);
     const qty = parseMoneyLike(qtyRaw);
 
@@ -124,12 +127,11 @@ function normalizeRows(rows: Holding[]) {
       toISODate(p.firstOwnedAt) ??
       null;
 
-    // ✅ Prefer backend days_held
+    const asOfISO = toISODate(p.as_of) ?? null;
+
+    // ✅ NEW: prefer backend days_held
     const daysHeldRaw = pick(p, "days_held", ["daysHeld"]);
     const daysHeld = parseMoneyLike(daysHeldRaw);
-
-    // (rarely present per-row) snapshot date
-    const asOfISO = toISODate(p.as_of) ?? null;
 
     const isCash = String(symbol).includes("*");
 
@@ -142,8 +144,8 @@ function normalizeRows(rows: Holding[]) {
       __avg: avgCost,
       __currentPrice: currentPrice,
       __openedAtISO: openedAtISO,
-      __daysHeld: daysHeld,
       __asOfISO: asOfISO,
+      __daysHeld: daysHeld,
       __isCash: isCash,
     };
   });
@@ -157,22 +159,25 @@ export default function Holdings({ rows }: Props) {
 
   const hasRows = all.length > 0;
 
-  // ✅ This is your “current market balance” (includes cash)
+  // Net value (cash + invested) — this should match your "Net value" KPI (e.g. 9486.88)
   const netValue = all.reduce((acc, p) => acc + (Number.isFinite(p.__mv) ? p.__mv : 0), 0);
 
-  // ✅ totals for OPEN positions only (equities)
-  const totalOpenDollarGain = equities.reduce((acc, p) => {
-    const mv = p.__mv;
-    const cost = p.__cost;
-    const dg = Number.isFinite(mv) && Number.isFinite(cost) ? mv - cost : NaN;
-    return acc + (Number.isFinite(dg) ? dg : 0);
-  }, 0);
+  // Totals (OPEN POSITIONS ONLY)
+  const totalsOpen = equities.reduce(
+    (acc, p) => {
+      const mv = p.__mv;
+      const cost = p.__cost;
+      if (Number.isFinite(mv) && Number.isFinite(cost)) {
+        acc.dollar += mv - cost;
+      }
+      return acc;
+    },
+    { dollar: 0 }
+  );
 
-  // ✅ total % = open $ gain ÷ total portfolio net value (includes cash)
-  const totalOpenPctGain =
-    Number.isFinite(totalOpenDollarGain) && Number.isFinite(netValue) && netValue !== 0
-      ? totalOpenDollarGain / netValue
-      : NaN;
+  const totalDollarOpen = totalsOpen.dollar;
+  const totalPctOpen =
+    Number.isFinite(totalDollarOpen) && Number.isFinite(netValue) && netValue !== 0 ? totalDollarOpen / netValue : NaN;
 
   return (
     <>
@@ -224,23 +229,20 @@ export default function Holdings({ rows }: Props) {
                     const curPx = p.__currentPrice;
 
                     const dollarGain = Number.isFinite(mv) && Number.isFinite(cost) ? mv - cost : NaN;
-                    const pctGain =
-                      Number.isFinite(dollarGain) && Number.isFinite(cost) && cost !== 0 ? dollarGain / cost : NaN;
+                    const pctGain = Number.isFinite(dollarGain) && Number.isFinite(cost) && cost !== 0 ? dollarGain / cost : NaN;
 
-                    const weight =
-                      Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
+                    const weight = Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
 
-                    // ✅ Days held: trust backend first
+                    // ✅ Days held: prefer backend; else compute from opened_at -> as_of/today
                     const opened = p.__openedAtISO;
                     const asOf = p.__asOfISO;
                     const todayISO = new Date().toISOString().slice(0, 10);
 
-                    const daysHeld =
-                      Number.isFinite(p.__daysHeld)
-                        ? p.__daysHeld
-                        : opened
-                          ? daysBetweenUTC(opened, asOf ?? todayISO)
-                          : NaN;
+                    const daysHeld = Number.isFinite(p.__daysHeld)
+                      ? p.__daysHeld
+                      : opened
+                      ? daysBetweenUTC(opened, asOf ?? todayISO)
+                      : NaN;
 
                     return (
                       <tr key={`${p.symbol}-${idx}`}>
@@ -257,17 +259,13 @@ export default function Holdings({ rows }: Props) {
                     );
                   })}
 
-                  {/* ✅ Totals row for open positions */}
+                  {/* ✅ Totals row (Open positions) */}
                   <tr className={styles.sectionRow}>
                     <td colSpan={7} className={styles.sectionCell}>
-                      Totals (open positions)
+                      Totals (Open positions)
                     </td>
-                    <td className={`${styles.num} ${gainClassDollar(totalOpenDollarGain)}`}>
-                      {fmtMoney2(totalOpenDollarGain)}
-                    </td>
-                    <td className={`${styles.num} ${gainClassPct(totalOpenPctGain)}`}>
-                      {fmtPct(totalOpenPctGain)}
-                    </td>
+                    <td className={`${styles.num} ${gainClassDollar(totalDollarOpen)}`}>{fmtMoney2(totalDollarOpen)}</td>
+                    <td className={`${styles.num} ${gainClassPct(totalPctOpen)}`}>{fmtPct(totalPctOpen)}</td>
                   </tr>
 
                   {cash.length > 0 && (
@@ -281,8 +279,7 @@ export default function Holdings({ rows }: Props) {
                       {cash.map((p: any, idx: number) => {
                         const qty = p.__qty;
                         const mv = p.__mv;
-                        const weight =
-                          Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
+                        const weight = Number.isFinite(mv) && Number.isFinite(netValue) && netValue !== 0 ? mv / netValue : NaN;
 
                         return (
                           <tr key={`${p.symbol}-${idx}`} className={styles.cashRow}>
@@ -326,19 +323,17 @@ export default function Holdings({ rows }: Props) {
               <MobileRow key={`${p.symbol}-${idx}`} p={p} netValue={netValue} />
             ))}
 
-            {/* ✅ Mobile totals */}
-            <div className={styles.mobileSection}>Totals (open positions)</div>
+            {/* ✅ Totals row for mobile */}
+            <div className={styles.mobileSection}>Totals (Open positions)</div>
             <div className={styles.mobileRow}>
               <div className={styles.mobileTopLine}>
-                <div className={styles.mobileSym}>OPEN P&amp;L</div>
-                <div className={`${styles.mobileValue} ${gainClassDollar(totalOpenDollarGain)}`}>
-                  {fmtMoney2(totalOpenDollarGain)}
-                </div>
+                <div className={styles.mobileSym}>TOTAL</div>
+                <div className={styles.mobileValue}>{fmtMoney2(totalDollarOpen)}</div>
               </div>
               <div className={styles.mobileMeta}>
                 <div className={styles.mobilePill}>
-                  <span className={styles.mobileK}>% (vs net)</span>
-                  <span className={`${styles.mobileV} ${gainClassPct(totalOpenPctGain)}`}>{fmtPct(totalOpenPctGain)}</span>
+                  <span className={styles.mobileK}>% Total</span>
+                  <span className={`${styles.mobileV} ${gainClassPct(totalPctOpen)}`}>{fmtPct(totalPctOpen)}</span>
                 </div>
               </div>
             </div>
@@ -376,12 +371,11 @@ function MobileRow({ p, netValue, isCash }: { p: any; netValue: number; isCash?:
   const asOf = p.__asOfISO;
   const todayISO = new Date().toISOString().slice(0, 10);
 
-  const daysHeld =
-    Number.isFinite(p.__daysHeld)
-      ? p.__daysHeld
-      : opened
-        ? daysBetweenUTC(opened, asOf ?? todayISO)
-        : NaN;
+  const daysHeld = Number.isFinite(p.__daysHeld)
+    ? p.__daysHeld
+    : opened
+    ? daysBetweenUTC(opened, asOf ?? todayISO)
+    : NaN;
 
   return (
     <div className={`${styles.mobileRow} ${isCash ? styles.mobileCash : ""}`}>

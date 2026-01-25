@@ -11,7 +11,6 @@ type DashboardLatest = {
   non_cash_positions_value: number;
   todays_pnl_total: number;
 };
-
 type ApiPosition = {
   ticker: string;
   name?: string;
@@ -20,7 +19,6 @@ type ApiPosition = {
   last_price?: number;
   market_value?: number;
 
-  // IMPORTANT: these exist in your snapshots and backend response
   cost_value?: number;
   avg_cost?: number;
 
@@ -31,11 +29,17 @@ type ApiPosition = {
 
   price_as_of?: string | null;
 
+  // ✅ NEW: backend days/opened/as_of
+  opened_at?: string | null;
+  days_held?: number | null;
+  as_of?: string | null;
+
   // legacy fallbacks
   priceAsOf?: string | null;
   updated_at?: string | null;
   updatedAt?: string | null;
 };
+
 
 type ApiPositionsResp = {
   as_of?: string;
@@ -167,30 +171,35 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
       p.price_as_of ?? p.priceAsOf ?? p.updated_at ?? p.updatedAt ?? null;
 
     // return the "PositionRow"-like object, but include the raw fields too
-    return {
-      symbol: p.ticker,
-      name: p.name ?? p.ticker,
+        return {
+          symbol: p.ticker,
+          name: p.name ?? p.ticker,
 
-      qty: quantity,
-      avg: avg_cost, // old UI field
-      price: Number.isFinite(last_price) ? Number(last_price.toFixed(2)) : 0,
-      value: Number.isFinite(market_value) ? Number(market_value.toFixed(2)) : 0,
-      weight: Number.isFinite(w) ? pct(w) : "—",
-      day: typeof p.day_change_pct === "number" ? pct(p.day_change_pct) : "—",
-      pnl:
-        typeof p.unrealized_pl === "number" && typeof p.unrealized_pl_pct === "number"
-          ? `${money(p.unrealized_pl)} (${pct(p.unrealized_pl_pct)})`
-          : "—",
-      price_as_of,
+          qty: quantity,
+          avg: avg_cost,
+          price: Number.isFinite(last_price) ? Number(last_price.toFixed(2)) : 0,
+          value: Number.isFinite(market_value) ? Number(market_value.toFixed(2)) : 0,
+          weight: Number.isFinite(w) ? pct(w) : "—",
+          day: typeof p.day_change_pct === "number" ? pct(p.day_change_pct) : "—",
+          pnl:
+            typeof p.unrealized_pl === "number" && typeof p.unrealized_pl_pct === "number"
+              ? `${money(p.unrealized_pl)} (${pct(p.unrealized_pl_pct)})`
+              : "—",
+          price_as_of,
 
-      // EXTRA FIELDS (critical for new holdings columns)
-      ticker: p.ticker,
-      quantity,
-      last_price,
-      market_value,
-      cost_value,
-      avg_cost,
-    } as any;
+          ticker: p.ticker,
+          quantity,
+          last_price,
+          market_value,
+          cost_value,
+          avg_cost,
+
+          // ✅ NEW passthroughs for holdings
+          opened_at: p.opened_at ?? null,
+          days_held: typeof p.days_held === "number" ? p.days_held : null,
+          as_of: (r?.as_of ?? p.as_of ?? null) as any,
+        } as any;
+
   });
 }
 
