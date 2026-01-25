@@ -198,6 +198,7 @@ export async function getPositionsForUI(): Promise<PositionRow[]> {
           opened_at: p.opened_at ?? null,
           days_held: typeof p.days_held === "number" ? p.days_held : null,
           as_of: (r?.as_of ?? p.as_of ?? null) as any,
+          portfolio_total_value: total,
         } as any;
 
   });

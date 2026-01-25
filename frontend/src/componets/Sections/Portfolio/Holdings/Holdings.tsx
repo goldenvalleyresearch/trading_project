@@ -161,6 +161,8 @@ export default function Holdings({ rows }: Props) {
 
   // Net value (cash + invested) — this should match your "Net value" KPI (e.g. 9486.88)
   const netValue = all.reduce((acc, p) => acc + (Number.isFinite(p.__mv) ? p.__mv : 0), 0);
+  const netValueFromApi = parseMoneyLike(all?.[0]?.portfolio_total_value);
+  const netValueForTotals = Number.isFinite(netValueFromApi) ? netValueFromApi : netValue;
 
   // Totals (OPEN POSITIONS ONLY)
   const totalsOpen = equities.reduce(
@@ -177,7 +179,9 @@ export default function Holdings({ rows }: Props) {
 
   const totalDollarOpen = totalsOpen.dollar;
   const totalPctOpen =
-    Number.isFinite(totalDollarOpen) && Number.isFinite(netValue) && netValue !== 0 ? totalDollarOpen / netValue : NaN;
+    Number.isFinite(totalDollarOpen) && Number.isFinite(netValueForTotals) && netValueForTotals !== 0
+      ? totalDollarOpen / netValueForTotals
+      : NaN;
 
   return (
     <>
