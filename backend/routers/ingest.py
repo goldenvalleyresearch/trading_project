@@ -555,6 +555,7 @@ class IngestPerformanceResp(BaseModel):
     rows_written: int
 
 
+
 @router.post("/positions")
 async def ingest_positions(
     req: Request,
@@ -763,6 +764,188 @@ async def debug_positions(
 # --------------------
 # endpoints: PERFORMANCE
 # --------------------
+
+# --------------------
+# endpoints: ACTIVITY / TRADES
+# --------------------
+
+class IngestActivityResp(BaseModel):
+    rows_written: int
+    rows_skipped: int
+    rows_total_seen: int
+
+
+def _parse_run_date_cell(v: Any) -> Optional[str]:
+    """
+    Returns YYYY-MM-DD from either:
+      - already-ISO strings
+      - M/D/YYYY strings
+      - pandas / excel date-like values
+    """
+    if v is None:
+        return None
+
+    # pandas Timestamp / datetime
+    if isinstance(v, datetime):
+        return v.date().isoformat()
+
+    s = str(v).strip()
+    if not s:
+        return None
+
+    # already ISO
+    if ISO_DATE_RE.match(s[:10]):
+        return s[:10]
+
+    # M/D/YYYY
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", s)
+    if m:
+        mm, dd, yy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if 1 <= mm <= 12 and 1 <= dd <= 31:
+            return f"{yy:04d}-{mm:02d}-{dd:02d}"
+
+    # sometimes excel-ish like "2026-01-23 00:00:00"
+    if len(s) >= 10 and ISO_DATE_RE.match(s[:10]):
+        return s[:10]
+
+    return None
+
+
+def _action_side(action: str) -> Optional[str]:
+    a = (action or "").strip().lower()
+    if a.startswith("you bought"):
+        return "BUY"
+    if a.startswith("you sold"):
+        return "SELL"
+    return None
+
+
+@router.post("/activity", response_model=IngestActivityResp)
+async def ingest_activity(
+    req: Request,
+    file: UploadFile = File(...),
+):
+    require_admin(req)
+
+    df, raw, filename = await _read_upload_table(file)
+
+    # Try to locate columns (your screenshot headers)
+    col_run_date = _find_col_contains(df, ["run date"]) or _find_col_exact(df, "Run Date") or _find_col_contains(df, ["date"])
+    col_action = _find_col_contains(df, ["action"]) or _find_col_exact(df, "Action")
+    col_symbol = _find_col_contains(df, ["symbol", "ticker"]) or _find_col_exact(df, "Symbol")
+    col_desc = _find_col_contains(df, ["description"]) or _find_col_exact(df, "Description")
+    col_price = _find_col_contains(df, ["price"]) or _find_col_exact(df, "Price ($)") or _find_col_exact(df, "Price")
+    col_qty = _find_col_contains(df, ["quantity", "qty", "shares"]) or _find_col_exact(df, "Quantity")
+    col_fees = _find_col_contains(df, ["fees"]) or _find_col_exact(df, "Fees ($)") or _find_col_exact(df, "Fees")
+    col_settle = _find_col_contains(df, ["settlement"]) or _find_col_exact(df, "Settlement Date")
+
+    if not col_run_date or not col_action or not col_symbol:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "Missing required columns for activity ingest",
+                "need": ["Run Date", "Action", "Symbol"],
+                "found_columns": list(df.columns),
+                "picked": {
+                    "run_date": col_run_date,
+                    "action": col_action,
+                    "symbol": col_symbol,
+                    "price": col_price,
+                    "qty": col_qty,
+                    "fees": col_fees,
+                    "settlement": col_settle,
+                },
+            },
+        )
+
+    db = get_db()
+    col = db["activity_trades"]
+
+    raw_sha256 = hashlib.sha256(raw).hexdigest()
+
+    rows_total = 0
+    written = 0
+    skipped = 0
+
+    for _, r in df.iterrows():
+        rows_total += 1
+
+        action = str(r.get(col_action, "")).strip()
+        side = _action_side(action)
+        if not side:
+            skipped += 1
+            continue
+
+        trade_date = _parse_run_date_cell(r.get(col_run_date))
+        if not trade_date:
+            skipped += 1
+            continue
+
+        sym = _clean_symbol(str(r.get(col_symbol, "")).strip())
+        if not sym or not _looks_like_symbol(sym):
+            skipped += 1
+            continue
+
+        desc = str(r.get(col_desc, "")).strip() if col_desc else ""
+        price = _to_float(r.get(col_price)) if col_price else None
+        qty = _to_float(r.get(col_qty)) if col_qty else None
+        fees = _to_float(r.get(col_fees)) if col_fees else None
+        settle_date = _parse_run_date_cell(r.get(col_settle)) if col_settle else None
+
+        if qty is None or qty == 0:
+            skipped += 1
+            continue
+
+        # Normalize qty sign: store as positive, side indicates direction
+        qty_abs = abs(float(qty))
+
+        # Value estimate (helpful even if price is missing)
+        value_est = (float(price) * qty_abs) if isinstance(price, (int, float)) else None
+
+        # Deterministic trade_id to dedupe re-uploads
+        # Include core fields + file hash so it stays stable for same row.
+        trade_key = f"{trade_date}|{side}|{sym}|{qty_abs}|{price or ''}|{settle_date or ''}|{action.lower()}"
+        trade_id = hashlib.sha256(trade_key.encode("utf-8")).hexdigest()[:24]
+
+        doc = {
+            "trade_id": trade_id,
+            "trade_date": trade_date,
+            "settlement_date": settle_date,
+            "side": side,
+            "ticker": sym,
+            "description": desc or None,
+            "qty": qty_abs,
+            "price": float(price) if isinstance(price, (int, float)) else None,
+            "fees": float(fees) if isinstance(fees, (int, float)) else None,
+            "value_est": float(value_est) if isinstance(value_est, (int, float)) else None,
+
+            # source info
+            "source": {
+                "filename": filename,
+                "sha256": raw_sha256,
+                "action_raw": action,
+            },
+            "updated_at": utcnow(),
+        }
+
+        res = await col.update_one(
+            {"trade_id": trade_id},
+            {"$set": doc, "$setOnInsert": {"created_at": utcnow()}},
+            upsert=True,
+        )
+
+        # count a "write" if it inserted OR modified
+        if res.upserted_id is not None or (res.modified_count or 0) > 0:
+            written += 1
+
+    return {
+        "rows_written": written,
+        "rows_skipped": skipped,
+        "rows_total_seen": rows_total,
+    }
+
+
+
 
 @router.post("/performance", response_model=IngestPerformanceResp)
 async def ingest_performance(

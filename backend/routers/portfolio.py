@@ -21,6 +21,18 @@ REFRESH_CONCURRENCY = 8
 # -----------------------
 # Response Models
 # -----------------------
+class PositionsTotals(BaseModel):
+    unrealized_pl_total: float
+    unrealized_pl_pct_of_yday_balance: Optional[float] = None
+    yday_balance: Optional[float] = None
+    yday_balance_date: Optional[str] = None
+
+
+class PositionsResp(BaseModel):
+    data: List[PositionOut]
+    as_of: str
+    totals: Optional[PositionsTotals] = None
+
 
 class PositionOut(BaseModel):
     ticker: str
@@ -38,6 +50,7 @@ class PositionOut(BaseModel):
 
     # New: used by frontend for days-held (can remain None until you wire a true source)
     opened_at: Optional[datetime] = None
+    days_held: Optional[int] = None  # ✅ add this
 
     day_change: Optional[float] = None
     day_change_pct: Optional[float] = None
@@ -84,6 +97,29 @@ class EquityCurveResp(BaseModel):
 # -----------------------
 # Helpers
 # -----------------------
+async def _yday_balance_for_asof(as_of: str) -> tuple[Optional[float], Optional[str]]:
+    """
+    Return (balance, date) from performance_daily for the most recent row with date <= as_of.
+    """
+    db = get_db()
+    perf = db["performance_daily"]
+
+    doc = await perf.find_one(
+        {"date": {"$lte": as_of}},
+        projection={"_id": 0, "date": 1, "balance": 1},
+        sort=[("date", -1)],
+    )
+
+    if not doc:
+        return None, None
+
+    bal = doc.get("balance")
+    d = str(doc.get("date") or "")[:10]
+    if not isinstance(bal, (int, float)):
+        return None, d if d else None
+
+    return float(bal), (d if d else None)
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -166,6 +202,113 @@ def _extract_pending_amount(doc: dict) -> float:
             pending += _position_value(p)
 
     return float(pending)
+
+
+def _parse_iso_date(d: str) -> Optional[datetime]:
+    try:
+        if not d or len(d) < 10:
+            return None
+        dt = datetime.fromisoformat(d[:10])
+        return dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+from typing import Dict, Iterable, Optional, Set
+from datetime import datetime
+
+async def _opened_at_map_from_activity_trades(
+    *,
+    start_date: str = "2025-01-01",
+    end_date: Optional[str] = None,                 # ✅ only consider trades up to snapshot as_of
+    only_tickers: Optional[Iterable[str]] = None,   # ✅ only compute for tickers in the snapshot
+) -> Dict[str, datetime]:
+    """
+    Builds {TICKER -> opened_at} using activity_trades.
+
+    Key behavior:
+    - opened_at is the most recent date where position goes from 0 -> >0 (within the window)
+    - SELLs that would make qty negative (because position existed before start_date) are ignored
+      so we don't invent a fake "close" then a fake "re-open".
+    - If end_date is provided, we only use trades <= end_date (so opened_at/days_held match snapshot as_of).
+    """
+
+    db = get_db()
+    col = db["activity_trades"]
+
+    ticker_filter: Optional[Set[str]] = None
+    if only_tickers is not None:
+        ticker_filter = {str(t or "").upper().strip() for t in only_tickers if str(t or "").strip()}
+        ticker_filter = {t for t in ticker_filter if t and not _is_cash_like_ticker(t)}
+        if not ticker_filter:
+            return {}
+
+    q: dict = {"trade_date": {"$gte": start_date}}
+    if end_date:
+        q["trade_date"]["$lte"] = end_date
+    if ticker_filter is not None:
+        q["ticker"] = {"$in": sorted(ticker_filter)}
+
+    cur = (
+        col.find(
+            q,
+            projection={"_id": 0, "ticker": 1, "side": 1, "qty": 1, "trade_date": 1, "created_at": 1},
+        )
+        .sort([("trade_date", 1), ("created_at", 1)])  # stable ordering within a day
+    )
+
+    rows = await cur.to_list(length=200000)
+
+    pos_qty: Dict[str, float] = {}
+    opened_at: Dict[str, datetime] = {}
+
+    for r in rows:
+        t = str(r.get("ticker") or "").upper().strip()
+        if not t or _is_cash_like_ticker(t):
+            continue
+        if ticker_filter is not None and t not in ticker_filter:
+            continue
+
+        side = str(r.get("side") or "").upper().strip()
+        if side not in ("BUY", "SELL"):
+            continue
+
+        dt = _parse_iso_date(str(r.get("trade_date") or ""))
+        if dt is None:
+            continue
+
+        try:
+            qty = abs(float(r.get("qty") or 0.0))
+        except Exception:
+            qty = 0.0
+        if qty <= 0:
+            continue
+
+        prev = float(pos_qty.get(t, 0.0))
+
+        if side == "BUY":
+            new = prev + qty
+            pos_qty[t] = new
+
+            # record open when we cross from 0 -> positive
+            if prev <= 0.0 and new > 0.0:
+                opened_at[t] = dt
+
+        else:  # SELL
+            # ✅ critical: if we don't know baseline and we're at 0, ignore sells (don't go negative)
+            if prev <= 0.0:
+                pos_qty[t] = 0.0
+                continue
+
+            new = prev - qty
+            if new < 1e-9:
+                new = 0.0
+            pos_qty[t] = new
+
+            # if fully closed, remove open marker (next BUY will re-open)
+            if new == 0.0 and t in opened_at:
+                del opened_at[t]
+
+    return opened_at
 
 
 def _snapshot_net_value(doc: dict) -> float:
@@ -466,6 +609,27 @@ async def get_latest_positions(
 ):
     doc = await _latest_snapshot_doc()
     as_of = str(doc.get("as_of", ""))[:10]
+    asof_dt = _parse_iso_date(as_of) or utcnow()
+
+    # build tickers from the snapshot positions (only non-cash, and qty > 0)
+    snapshot_tickers: list[str] = []
+    for p in _positions_list(doc):
+        if not isinstance(p, dict):
+            continue
+        ticker = str(p.get("ticker") or p.get("symbol") or "").upper().strip()
+        if not ticker or _is_cash_like_ticker(ticker):
+            continue
+        qty = _coerce_float(p.get("quantity", 0))
+        if qty and qty > 0:
+            snapshot_tickers.append(ticker)
+
+    activity_opened = await _opened_at_map_from_activity_trades(
+        start_date="2025-01-01",
+        end_date=as_of,                 # ✅ as-of snapshot date
+        only_tickers=snapshot_tickers,  # ✅ only current holdings
+    )
+
+
 
     await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000, force=force_refresh)
     prices = await _prices_map()
@@ -493,6 +657,7 @@ async def get_latest_positions(
                 price_as_of = live.get("as_of") or global_ts
             else:
                 price_as_of = global_ts
+        opened_src = _as_aware_utc(pp.get("opened_at")) or activity_opened.get(ticker)
 
         out.append(
             PositionOut(
@@ -504,14 +669,39 @@ async def get_latest_positions(
                 price_as_of=price_as_of,
                 cost_value=(None if pp.get("cost_value") is None else _coerce_float(pp.get("cost_value"))),
                 avg_cost=(None if pp.get("avg_cost") is None else _coerce_float(pp.get("avg_cost"))),
-                opened_at=_as_aware_utc(pp.get("opened_at")),
+                opened_at=opened_src,
+                days_held=(int((asof_dt.date() - opened_src.date()).days) if opened_src else None),
+
                 day_change=(None if pp.get("day_change") is None else _coerce_float(pp.get("day_change"))),
                 day_change_pct=(None if pp.get("day_change_pct") is None else _coerce_float(pp.get("day_change_pct"))),
                 unrealized_pl=(None if pp.get("unrealized_pl") is None else _coerce_float(pp.get("unrealized_pl"))),
                 unrealized_pl_pct=(None if pp.get("unrealized_pl_pct") is None else _coerce_float(pp.get("unrealized_pl_pct"))),
             )
         )
+        # ----- totals row (non-cash only) -----
+    unreal_total = 0.0
+    for item in out:
+        t = (item.ticker or "").upper().strip()
+        if not t or _is_cash_like_ticker(t):
+            continue
+        if isinstance(item.unrealized_pl, (int, float)):
+            unreal_total += float(item.unrealized_pl)
 
+    yday_balance, yday_date = await _yday_balance_for_asof(as_of)
+
+    unreal_pct = None
+    if isinstance(yday_balance, (int, float)) and yday_balance and yday_balance > 0:
+        unreal_pct = float(unreal_total / yday_balance)
+
+    totals = {
+        "unrealized_pl_total": float(unreal_total),
+        "unrealized_pl_pct_of_yday_balance": unreal_pct,
+        "yday_balance": yday_balance,
+        "yday_balance_date": yday_date,
+    }
+
+    return {"data": out, "as_of": as_of, "totals": totals}
+    
     return {"data": out, "as_of": as_of}
 
 
