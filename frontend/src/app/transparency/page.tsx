@@ -1,16 +1,15 @@
 // src/app/transparency/page.tsx
 import styles from "./page.module.css";
 import Header from "@/componets/UI/Header_bar/Header_bar";
-import TransparencyTimeline from "@/componets/UI/TransparencyTimeline/TransparencyTimeline";
 import Footer from "@/componets/UI/Footer/Footer";
-
 import TransparencyHero from "@/componets/Sections/Transparency/TransparencyHero/TransparencyHero";
+
+import ActivityPanel from "@/componets/Sections/Transparency/TransparencyHero/ActivityPanel/ActivityPanel";
 
 import { BRAND_NAME, LINKS } from "@/lib/site";
 import {
   getTransparencyAsOf,
   getTransparencySummaryForUI,
-  getTransparencyTimelineForUI,
 } from "@/lib/transparency";
 
 const EMPTY_SUMMARY = {
@@ -26,15 +25,13 @@ const EMPTY_SUMMARY = {
 };
 
 export default async function TransparencyPage() {
-  const [asOfRes, summaryRes, timelineRes] = await Promise.allSettled([
+  const [asOfRes, summaryRes] = await Promise.allSettled([
     getTransparencyAsOf(),
     getTransparencySummaryForUI(),
-    getTransparencyTimelineForUI(),
   ]);
 
   const asOf = asOfRes.status === "fulfilled" ? asOfRes.value : "—";
   const summary = summaryRes.status === "fulfilled" ? summaryRes.value : EMPTY_SUMMARY;
-  const typedEvents = timelineRes.status === "fulfilled" ? timelineRes.value : [];
 
   return (
     <div className={styles.page}>
@@ -42,29 +39,19 @@ export default async function TransparencyPage() {
 
       <main className={styles.main}>
         <TransparencyHero asOf={asOf} summary={summary} />
-
-        <section id="receipts" className={styles.receipts}>
+        {/* NEW: Account Activity */}
+        <ActivityPanel />
+        <section id="activity" className={styles.receipts}>
           <div className={styles.sectionTop}>
             <div>
-              <div className={styles.sectionTitle}>Receipts</div>
-
+              <div className={styles.sectionTitle}>Activity</div>
             </div>
-            <span className={styles.badge}>
-              {typedEvents.length ? `${typedEvents.length} events` : "empty"}
-            </span>
           </div>
 
           <div className={styles.sectionBody}>
-            {typedEvents.length ? (
-              <TransparencyTimeline items={typedEvents} />
-            ) : (
-              <div className={styles.empty}>
-                <div className={styles.emptyTitle}>No receipts yet</div>
-              </div>
-            )}
+            <ActivityPanel />
           </div>
         </section>
-
       </main>
 
       <Footer />
