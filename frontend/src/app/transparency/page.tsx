@@ -39,8 +39,8 @@ export default async function TransparencyPage() {
 
       <main className={styles.main}>
         <TransparencyHero asOf={asOf} summary={summary} />
+
         {/* NEW: Account Activity */}
-        <ActivityPanel />
         <section id="activity" className={styles.receipts}>
           <div className={styles.sectionTop}>
             <div>
@@ -53,6 +53,7 @@ export default async function TransparencyPage() {
           </div>
         </section>
       </main>
+
 
       <Footer />
     </div>
