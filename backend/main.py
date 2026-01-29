@@ -14,13 +14,13 @@ from routers import (
     research,
     auth,
 )
+from routers.closed_trades import router as closed_trades_router  # ✅ move here
+from routers.activity import router as activity_router
+
 
 load_dotenv()
 
-app = FastAPI(
-    title="ObviousTrades API",
-    version="0.1.0",
-)
+app = FastAPI(title="ObviousTrades API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +37,8 @@ async def startup():
     users = db["users"]
     await users.create_index("email", unique=True)
     await users.create_index("username", unique=True)
+    await db["activity_thesis"].create_index("trade_id", unique=True)
+
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -50,6 +52,9 @@ app.include_router(history.router)
 app.include_router(newsletter.router)
 app.include_router(newsletter.admin_router)
 app.include_router(research.router)
+app.include_router(closed_trades_router)  # ✅
+app.include_router(activity_router)
+
 
 @app.get("/")
 async def root():

@@ -569,6 +569,8 @@ async def ingest_positions(
     df, raw, filename = await _read_upload_table(file)
 
     raw_sha256 = hashlib.sha256(raw).hexdigest()
+    
+    
     raw_size = len(raw)
 
     cols = _repair_shift_if_needed(df, _pick_columns_for_positions(df))
@@ -862,6 +864,27 @@ async def ingest_activity(
     col = db["activity_trades"]
 
     raw_sha256 = hashlib.sha256(raw).hexdigest()
+
+    # --- find newest trade date in file ---
+    dates_seen: list[str] = []
+    for _, rr in df.iterrows():
+        d = _parse_run_date_cell(rr.get(col_run_date))
+        if d:
+            dates_seen.append(d)
+
+    if not dates_seen:
+        return {"rows_written": 0, "rows_skipped": len(df), "rows_total_seen": len(df)}
+
+    target_date = max(dates_seen)
+
+    # --- skip if we already have activity for that date ---
+    already = await col.find_one({"trade_date": target_date}, projection={"_id": 1})
+    if already:
+        return {"rows_written": 0, "rows_skipped": len(df), "rows_total_seen": len(df)}
+
+    # --- only keep rows for that date ---
+    df = df[df[col_run_date].apply(lambda x: _parse_run_date_cell(x) == target_date)]
+
 
     rows_total = 0
     written = 0
