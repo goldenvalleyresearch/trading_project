@@ -1,155 +1,30 @@
-"use client";
+import Link from "next/link";
 
-import { useState } from "react";
-import styles from "./page.module.css";
+const API = process.env.NEXT_PUBLIC_API_BASE_URL!;
 
-import Header from "@/componets/UI/Header_bar/Header_bar";
-import FeatureCard from "@/componets/UI/FeatureCard/FeatureCard";
-import Footer from "@/componets/UI/Footer/Footer";
-
-import { BRAND_NAME, LINKS } from "../../lib/site";
-import { isValidEmail, subscribeNewsletter } from "../../lib/newsletter";
-
-export default function NewsletterPage() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function onSubscribe() {
-    const e = email.trim();
-    if (!isValidEmail(e)) {
-      setErr("Enter a valid email address.");
-      setMsg(null);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setErr(null);
-      setMsg(null);
-
-      const res = await subscribeNewsletter(e);
-      setMsg(
-        res.status === "already_subscribed"
-          ? "You’re already on the list."
-          : "Subscribed — watch your inbox."
-      );
-
-      setEmail("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Subscription failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
+export default async function NewsletterIndex() {
+  const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
+  const { items } = await res.json();
 
   return (
-    <div className={styles.page}>
-      <Header brand={BRAND_NAME} links={[...LINKS]} />
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <h1 className="text-3xl font-bold mb-8">Market Letters</h1>
 
-      <main className={styles.main}>
-        <section className={styles.hero}>
-          <div className={styles.heroLeft}>
-            <div className={styles.kicker}>Newsletter</div>
-
-            <h1 className={styles.h1}>Get the Golden Valley newsletter.</h1>
-
-            <p className={styles.lede}>
-              One concise email when there’s something worth knowing —
-              no feeds, no noise, no hype.
-            </p>
-
-            <div className={styles.badges} aria-label="Newsletter properties">
-              <span className={styles.badge}>Short emails</span>
-              <span className={styles.badge}>Only when it matters</span>
-              <span className={styles.badge}>Unsubscribe anytime</span>
+      <ul className="space-y-6">
+        {items.map((p: any) => (
+          <li key={p.slug}>
+            <Link
+              href={`/newsletter/${p.slug}`}
+              className="text-xl font-medium hover:underline"
+            >
+              {p.title}
+            </Link>
+            <div className="text-sm text-gray-500">
+              {new Date(p.created_at).toLocaleDateString()}
             </div>
-
-            <div className={styles.heroCtas}>
-              <a className={styles.ghostBtn} href="/portfolio">
-                Open portfolio →
-              </a>
-              <a className={styles.secondaryBtn} href="/transparency">
-                See methodology →
-              </a>
-              <a href="/performance" className={styles.premiumBtnInline}>
-                Performance →
-              </a>
-            </div>
-          </div>
-
-          <aside className={styles.heroSignup} aria-label="Newsletter signup">
-            <div className={styles.heroSignupGlow} aria-hidden="true" />
-
-            <div className={styles.heroSignupTop}>
-              <div className={styles.heroSignupTitle}>Get the next note</div>
-              <div className={styles.heroSignupSub}>
-                We email when there’s something actionable.
-              </div>
-            </div>
-
-            <label className={styles.label} htmlFor="email">
-              Your email
-            </label>
-
-            <div className={styles.formRow}>
-              <input
-                id="email"
-                className={styles.input}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@domain.com"
-                inputMode="email"
-                autoComplete="email"
-              />
-
-              <button
-                className={styles.primaryBtn}
-                onClick={onSubscribe}
-                disabled={loading}
-              >
-                {loading ? "Subscribing…" : "Get updates"}
-              </button>
-            </div>
-
-            <div className={styles.fineRow}>
-              <span className={styles.finePrint}>No spam.</span>
-              <span className={styles.fineDivider}>•</span>
-              <span className={styles.finePrint}>One-click unsubscribe.</span>
-            </div>
-
-            {(msg || err) && (
-              <div className={err ? styles.toastErr : styles.toastOk} role="status">
-                {err ?? msg}
-              </div>
-            )}
-          </aside>
-        </section>
-
-        <section className={styles.navGrid} aria-label="Explore">
-          <FeatureCard
-            title="Performance"
-            body="Equity curve, drawdowns, and benchmark comparisons."
-            href="/performance"
-            linkLabel="View performance"
-          />
-          <FeatureCard
-            title="Portfolio"
-            body="Positions, weights, and cash — audit-friendly."
-            href="/portfolio"
-            linkLabel="Open portfolio"
-          />
-          <FeatureCard
-            title="Transparency"
-            body="Receipts-first timeline of updates and runs."
-            href="/transparency"
-            linkLabel="Open transparency"
-          />
-        </section>
-      </main>
-
-      <Footer />
-    </div>
+          </li>
+        ))}
+      </ul>
+    </main>
   );
 }
