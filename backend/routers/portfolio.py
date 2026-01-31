@@ -602,14 +602,23 @@ def _compute_dashboard_from_positions(
 # Endpoints
 # -----------------------
 
+
 @router.get("/api/portfolio/positions", response_model=PositionsResp)
 async def get_latest_positions(
     refresh_max_age_sec: int = Query(REFRESH_EVERY_SEC, ge=30, le=86400),
     force_refresh: bool = Query(False),
 ):
+    # ✅ Snapshot is the single source of truth
     doc = await _latest_snapshot_doc()
     as_of = str(doc.get("as_of", ""))[:10]
-    asof_dt = _parse_iso_date(as_of) or utcnow()
+
+    # Use the ingest timestamp (best “price as of”), fallback to as_of midnight UTC
+    ingested_at = None
+    src = doc.get("source") or {}
+    if isinstance(src, dict):
+        ingested_at = src.get("ingested_at")
+
+    price_as_of = _as_aware_utc(ingested_at) or (_parse_iso_date(as_of) or utcnow())
 
     # build tickers from the snapshot positions (only non-cash, and qty > 0)
     snapshot_tickers: list[str] = []
@@ -625,20 +634,12 @@ async def get_latest_positions(
 
     activity_opened = await _opened_at_map_from_activity_trades(
         start_date="2025-01-01",
-        end_date=as_of,                 # ✅ as-of snapshot date
-        only_tickers=snapshot_tickers,  # ✅ only current holdings
+        end_date=as_of,
+        only_tickers=snapshot_tickers,
     )
 
-
-
-    await ensure_prices_fresh(max_age_sec=refresh_max_age_sec, limit=2000, force=force_refresh)
-    prices = await _prices_map()
-
-    global_ts = await _latest_prices_timestamp()
-    if global_ts is None:
-        global_ts = utcnow()
-
     out: list[PositionOut] = []
+
     for p in _positions_list(doc):
         if not isinstance(p, dict):
             continue
@@ -647,16 +648,9 @@ async def get_latest_positions(
         if not ticker:
             continue
 
+        # ✅ NEVER overlay live pricing
         pp = p
-        if _is_cash_like_ticker(ticker):
-            price_as_of = global_ts
-        else:
-            live = prices.get(ticker)
-            if live is not None:
-                pp = _apply_live_price(p, live)
-                price_as_of = live.get("as_of") or global_ts
-            else:
-                price_as_of = global_ts
+
         opened_src = _as_aware_utc(pp.get("opened_at")) or activity_opened.get(ticker)
 
         out.append(
@@ -664,13 +658,19 @@ async def get_latest_positions(
                 ticker=ticker,
                 name=pp.get("name"),
                 quantity=_coerce_float(pp.get("quantity", 0)),
+
+                # ✅ take snapshot values as-is
                 last_price=(None if pp.get("last_price") is None else _coerce_float(pp.get("last_price"))),
                 market_value=(None if pp.get("market_value") is None else _coerce_float(pp.get("market_value"))),
+
+                # ✅ all tickers share the same ingest timestamp
                 price_as_of=price_as_of,
+
                 cost_value=(None if pp.get("cost_value") is None else _coerce_float(pp.get("cost_value"))),
                 avg_cost=(None if pp.get("avg_cost") is None else _coerce_float(pp.get("avg_cost"))),
+
                 opened_at=opened_src,
-                days_held=(int((asof_dt.date() - opened_src.date()).days) if opened_src else None),
+                days_held=(int((price_as_of.date() - opened_src.date()).days) if opened_src else None),
 
                 day_change=(None if pp.get("day_change") is None else _coerce_float(pp.get("day_change"))),
                 day_change_pct=(None if pp.get("day_change_pct") is None else _coerce_float(pp.get("day_change_pct"))),
@@ -678,7 +678,8 @@ async def get_latest_positions(
                 unrealized_pl_pct=(None if pp.get("unrealized_pl_pct") is None else _coerce_float(pp.get("unrealized_pl_pct"))),
             )
         )
-        # ----- totals row (non-cash only) -----
+
+    # ----- totals row (non-cash only) -----
     unreal_total = 0.0
     for item in out:
         t = (item.ticker or "").upper().strip()
@@ -701,8 +702,7 @@ async def get_latest_positions(
     }
 
     return {"data": out, "as_of": as_of, "totals": totals}
-    
-    return {"data": out, "as_of": as_of}
+
 
 
 @router.get("/api/history/dashboard-latest", response_model=DashboardLatestResp)

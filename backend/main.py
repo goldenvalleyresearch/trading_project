@@ -38,6 +38,10 @@ async def startup():
     await users.create_index("email", unique=True)
     await users.create_index("username", unique=True)
     await db["activity_thesis"].create_index("trade_id", unique=True)
+    # in main.py startup()
+    await db["newsletter_posts"].create_index("slug", unique=True)
+    await db["newsletter_posts"].create_index([("created_at", -1)])
+
 
 
 @app.on_event("shutdown")
