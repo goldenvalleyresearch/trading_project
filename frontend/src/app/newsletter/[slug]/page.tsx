@@ -1,55 +1,60 @@
-// src/app/newsletter/[slug]/page.tsx
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { formatShortDate } from "../../../lib/date";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-export default async function NewsletterPost({ params }: any) {
-  if (!API) {
+type PageProps = {
+  params: { slug: string };
+};
+
+export default async function NewsletterPost({ params }: PageProps) {
+  const slug = params?.slug;
+
+  if (!slug) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-12 text-white">
-        <h1 className="text-2xl font-bold">Newsletter</h1>
-        <p className="mt-4 text-gray-300">
-          Missing NEXT_PUBLIC_API_BASE_URL in Vercel environment variables.
+        <h1 className="text-2xl font-bold">Unable to load newsletter</h1>
+        <p className="mt-4 text-red-300">
+          Missing slug param. Check route folder: src/app/newsletter/[slug]/page.tsx
         </p>
       </main>
     );
   }
 
-  const url = `${API}/api/newsletter/posts/${encodeURIComponent(params.slug)}`;
-
-  let post: any = null;
-  let errorText = "";
-
-  try {
-    const res = await fetch(url, { cache: "no-store" });
-
-    if (!res.ok) {
-      errorText = `Fetch failed (${res.status})`;
-      const t = await res.text().catch(() => "");
-      if (t) errorText += `: ${t.slice(0, 300)}`;
-    } else {
-      post = await res.json();
-    }
-  } catch (e: any) {
-    errorText = e?.message || String(e);
+  if (!API) {
+    return (
+      <main className="mx-auto max-w-3xl px-6 py-12 text-white">
+        <h1 className="text-2xl font-bold">Unable to load newsletter</h1>
+        <p className="mt-4 text-red-300">
+          Missing NEXT_PUBLIC_API_BASE_URL in Vercel env vars.
+        </p>
+      </main>
+    );
   }
 
-  if (!post) {
+  const url = `${API}/api/newsletter/posts/${encodeURIComponent(slug)}`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
     return (
       <main className="mx-auto max-w-3xl px-6 py-12 text-white">
         <h1 className="text-2xl font-bold">Unable to load newsletter</h1>
         <p className="mt-4 text-gray-300">
-          Slug: <span className="font-mono">{params.slug}</span>
+          Slug: <span className="font-mono">{slug}</span>
         </p>
         <p className="mt-2 text-gray-300">
           URL: <span className="font-mono break-all">{url}</span>
         </p>
-        <p className="mt-4 text-red-300 whitespace-pre-wrap">{errorText}</p>
+        <p className="mt-4 text-red-300 whitespace-pre-wrap">
+          Fetch failed ({res.status}): {t}
+        </p>
       </main>
     );
   }
+
+  const post = await res.json();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 text-white">
