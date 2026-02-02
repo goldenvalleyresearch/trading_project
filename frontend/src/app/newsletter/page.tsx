@@ -1,5 +1,5 @@
 import Link from "next/link";
-
+import { parseApiDate } from "../../lib/date";
 const API = process.env.NEXT_PUBLIC_API_BASE_URL!;
 
 export default async function NewsletterIndex() {
@@ -20,7 +20,7 @@ export default async function NewsletterIndex() {
               {p.title}
             </Link>
             <div className="text-sm text-gray-500">
-              {new Date(p.created_at).toLocaleDateString()}
+              {parseApiDate(p.created_at)?.toLocaleDateString() ?? ""}
             </div>
           </li>
         ))}
