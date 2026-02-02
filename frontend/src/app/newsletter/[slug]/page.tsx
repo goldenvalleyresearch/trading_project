@@ -13,17 +13,19 @@ export default async function NewsletterPost({ params }: any) {
   const post = await res.json();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="mx-auto max-w-3xl px-6 py-12 text-white">
       <h1 className="text-3xl font-bold mb-2">{post.title}</h1>
-      <div className="text-sm text-gray-500 mb-8">
-        {parseApiDate(post.created_at)?.toLocaleDateString() ?? ""}
+
+      <div className="text-sm text-gray-400 mb-8">
+        {new Date(post.created_at).toLocaleDateString()}
       </div>
 
-      <article className="prose prose-lg">
+      <article className="prose prose-lg max-w-none prose-invert">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {post.content_md}
         </ReactMarkdown>
       </article>
     </main>
   );
+
 }
