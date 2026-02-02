@@ -1,14 +1,13 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { parseApiDate } from "../../../lib/date";
+import { formatShortDate } from "../../../lib/date";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL!;
 
 export default async function NewsletterPost({ params }: any) {
-  const res = await fetch(
-    `${API}/api/newsletter/posts/${params.slug}`,
-    { cache: "no-store" }
-  );
+  const res = await fetch(`${API}/api/newsletter/posts/${params.slug}`, {
+    cache: "no-store",
+  });
 
   const post = await res.json();
 
@@ -17,7 +16,7 @@ export default async function NewsletterPost({ params }: any) {
       <h1 className="text-3xl font-bold mb-2">{post.title}</h1>
 
       <div className="text-sm text-gray-400 mb-8">
-        {new Date(post.created_at).toLocaleDateString()}
+        {formatShortDate(post.created_at)}
       </div>
 
       <article className="prose prose-lg max-w-none prose-invert">
@@ -27,5 +26,4 @@ export default async function NewsletterPost({ params }: any) {
       </article>
     </main>
   );
-
 }
