@@ -7,7 +7,8 @@ export default async function NewsletterIndex() {
   const { items } = await res.json();
 
   return (
-    <main className="mx-auto max-w-4xl px-10 py-12">
+    <main className="mx-auto max-w-5xl px-16 py-14 bg-white text-black">
+
       <h1 className="text-4xl font-semibold tracking-tight mb-10 font-serif">
         Golden Valley Market Research Daily Newsletters
       </h1>

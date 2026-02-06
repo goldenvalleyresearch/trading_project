@@ -85,7 +85,8 @@ export default function NewsletterPostPage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12 text-white">
+      <main className="mx-auto max-w-5xl px-16 py-14 bg-white text-black font-times">
+
         <h1 className="text-2xl font-bold">Unable to load newsletter</h1>
         <p className="mt-4 text-gray-300">
           Slug: <span className="font-mono">{slug || "(empty)"}</span>
@@ -97,7 +98,8 @@ export default function NewsletterPostPage() {
 
   if (!post) {
     return (
-      <main className="mx-auto max-w-4xl px-10 py-12 bg-white text-black font-times">
+      <main className="mx-auto max-w-5xl px-16 py-14 bg-white text-black font-times">
+
         <h1 className="text-2xl font-bold">Loading…</h1>
         <p className="mt-4 text-gray-400">
           Fetching newsletter: <span className="font-mono">{slug || "…"}</span>
@@ -107,12 +109,14 @@ export default function NewsletterPostPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-10 py-12 bg-white text-black font-times">
+    <main className="mx-auto max-w-5xl px-16 py-14 bg-white text-black font-times">
+
       <h1 className="text-3xl font-bold mb-2">{post.title}</h1>
 
       
 
-      <article className="prose prose-lg max-w-none prose-invert">
+      <article className="prose prose-lg max-w-none">
+
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {normalizeBullets(post.content_md ?? "")}
         </ReactMarkdown>
