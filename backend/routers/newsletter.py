@@ -9,6 +9,7 @@ from bson import ObjectId
 
 from core.db import get_db
 from core.security import require_access_payload
+from fastapi import APIRouter, Request, HTTPException, Query
 
 router = APIRouter(prefix="/api/newsletter", tags=["Newsletter"])
 admin_router = APIRouter(prefix="/api/admin/newsletter", tags=["Admin Newsletter"])
@@ -99,7 +100,30 @@ async def list_posts(
     }
 
 # ---------- PUBLIC READ ----------
+@admin_router.delete("/posts/{slug}")
+async def delete_post(req: Request, slug: str):
+    _require_admin(req)
 
+    db = get_db()
+    col = db["newsletter_posts"]
+
+    res = await col.delete_one({"slug": slug})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return {"ok": True, "slug": slug, "deleted": True}
+@admin_router.post("/posts/{slug}/unpublish")
+async def unpublish_post(req: Request, slug: str):
+    _require_admin(req)
+
+    db = get_db()
+    col = db["newsletter_posts"]
+
+    res = await col.update_one({"slug": slug}, {"$set": {"published": False}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return {"ok": True, "slug": slug, "published": False}
 @router.get("/posts/{slug}")
 async def get_post(slug: str):
     db = get_db()
