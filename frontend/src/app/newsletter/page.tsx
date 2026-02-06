@@ -7,8 +7,10 @@ export default async function NewsletterIndex() {
   const { items } = await res.json();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <h1 className="text-3xl font-bold mb-8">Market Letters</h1>
+    <main className="mx-auto max-w-4xl px-10 py-12">
+      <h1 className="text-4xl font-semibold tracking-tight mb-10 font-serif">
+        Golden Valley Market Research Daily Newsletters
+      </h1>
 
       <ul className="space-y-6">
         {items.map((p: any) => (
@@ -19,9 +21,7 @@ export default async function NewsletterIndex() {
             >
               {p.title}
             </Link>
-            <div className="text-sm text-gray-500">
-              {parseApiDate(p.created_at)?.toLocaleDateString() ?? ""}
-            </div>
+            
           </li>
         ))}
       </ul>

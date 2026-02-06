@@ -15,6 +15,15 @@ type Post = {
   content_md: string;
   created_at: string;
 };
+function normalizeBullets(md: string): string {
+  return (md || "")
+    // convert "• " bullets to markdown list
+    .replace(/^\s*•\s+/gm, "- ")
+    // convert "o " nested bullets to markdown nested list
+    .replace(/^\s*o\s+/gm, "  - ");
+}
+
+
 
 export default function NewsletterPostPage() {
   const params = useParams();
@@ -88,7 +97,7 @@ export default function NewsletterPostPage() {
 
   if (!post) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-12 text-white">
+      <main className="mx-auto max-w-4xl px-10 py-12 bg-white text-black font-times">
         <h1 className="text-2xl font-bold">Loading…</h1>
         <p className="mt-4 text-gray-400">
           Fetching newsletter: <span className="font-mono">{slug || "…"}</span>
@@ -98,17 +107,16 @@ export default function NewsletterPostPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12 text-white">
+    <main className="mx-auto max-w-4xl px-10 py-12 bg-white text-black font-times">
       <h1 className="text-3xl font-bold mb-2">{post.title}</h1>
 
-      <div className="text-sm text-gray-400 mb-8">
-        {formatShortDate(post.created_at)}
-      </div>
+      
 
       <article className="prose prose-lg max-w-none prose-invert">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {post.content_md ?? ""}
+          {normalizeBullets(post.content_md ?? "")}
         </ReactMarkdown>
+
       </article>
     </main>
   );
