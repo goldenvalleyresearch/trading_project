@@ -11,6 +11,8 @@ type Post = {
 
 type GroupKey = "setup_wrap" | "monthly_pnl_macro" | "todays_score";
 
+const VALID_GROUPS: GroupKey[] = ["setup_wrap", "monthly_pnl_macro", "todays_score"];
+
 function groupLabel(key: GroupKey) {
   if (key === "setup_wrap") return "The Setup & The Wrap";
   if (key === "monthly_pnl_macro") return "Monthly P&L + Macro";
@@ -43,17 +45,20 @@ export default async function NewsletterSeriesPage({
 }: {
   params: { group: string };
 }) {
-  const group = (params?.group || "") as GroupKey;
+  // IMPORTANT: don’t cast first — validate first
+  const rawGroup = (params?.group || "").toString();
+  const group = VALID_GROUPS.includes(rawGroup as GroupKey) ? (rawGroup as GroupKey) : null;
 
-  // Basic guard so invalid routes don’t crash
-  const valid: GroupKey[] = ["setup_wrap", "monthly_pnl_macro", "todays_score"];
-  if (!valid.includes(group)) {
+  if (!group) {
     return (
-      <main className="min-h-screen bg-white text-black">
+      <main className="min-h-screen bg-[#070a10] text-white">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <h1 className="text-2xl font-semibold">Unknown series</h1>
-          <p className="mt-4">
-            <Link href="/newsletter" className="text-black underline underline-offset-4">
+          <p className="mt-6">
+            <Link
+              href="/newsletter"
+              className="text-white underline underline-offset-4 decoration-white/30 hover:decoration-white/60 visited:text-white"
+            >
               Back to newsletters
             </Link>
           </p>
@@ -64,14 +69,15 @@ export default async function NewsletterSeriesPage({
 
   if (!API) {
     return (
-      <main className="min-h-screen bg-white text-black">
+      <main className="min-h-screen bg-[#070a10] text-white">
         <div className="mx-auto max-w-5xl px-6 py-16">
-          <h1 className="text-2xl font-semibold">{groupLabel(group)}</h1>
-          <p className="mt-4 text-sm text-gray-600">
-            NEXT_PUBLIC_API_BASE_URL is not defined.
-          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">{groupLabel(group)}</h1>
+          <p className="mt-4 text-sm text-white/70">NEXT_PUBLIC_API_BASE_URL is not defined.</p>
           <p className="mt-6">
-            <Link href="/newsletter" className="text-black underline underline-offset-4">
+            <Link
+              href="/newsletter"
+              className="text-white underline underline-offset-4 decoration-white/30 hover:decoration-white/60 visited:text-white"
+            >
               Back
             </Link>
           </p>
@@ -86,6 +92,7 @@ export default async function NewsletterSeriesPage({
   try {
     const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
     const raw = await res.text();
+
     let json: any = null;
     try {
       json = raw ? JSON.parse(raw) : null;
@@ -109,27 +116,27 @@ export default async function NewsletterSeriesPage({
     .sort(sortNewestFirst);
 
   return (
-    <main className="min-h-screen bg-white text-black">
+    <main className="min-h-screen bg-[#070a10] text-white">
       <div className="mx-auto max-w-5xl px-6 py-16">
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-3xl font-semibold tracking-tight">{groupLabel(group)}</h1>
           <Link
             href="/newsletter"
-            className="text-sm text-black underline underline-offset-4 decoration-gray-300 hover:decoration-gray-500"
+            className="text-sm text-white underline underline-offset-4 decoration-white/30 hover:decoration-white/60 visited:text-white"
           >
             Back
           </Link>
         </div>
 
         {errorText ? (
-          <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mt-8 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
             <div className="font-semibold">Feed error</div>
             <div className="mt-1 whitespace-pre-wrap">{errorText}</div>
           </div>
         ) : null}
 
         {filtered.length === 0 ? (
-          <p className="mt-10 text-sm text-gray-600">No posts yet in this series.</p>
+          <p className="mt-10 text-sm text-white/70">No posts yet in this series.</p>
         ) : (
           <ul className="mt-10 space-y-3">
             {filtered.map((p) => (
@@ -137,16 +144,16 @@ export default async function NewsletterSeriesPage({
                 <Link
                   href={`/newsletter/${p.slug}`}
                   className="
-                    text-sm font-medium text-black
-                    hover:text-gray-700
-                    underline underline-offset-4 decoration-gray-300
-                    hover:decoration-gray-500
-                    visited:text-black
+                    text-sm font-medium text-white
+                    underline underline-offset-4 decoration-white/25
+                    hover:decoration-white/60
+                    visited:text-white
                   "
                 >
                   {p.title}
                 </Link>
-                <span className="hidden sm:inline text-xs text-gray-500">
+
+                <span className="hidden sm:inline text-xs text-white/60">
                   {(p.kind || "").toLowerCase() === "premarket"
                     ? "AM"
                     : (p.kind || "").toLowerCase() === "afterhours"
