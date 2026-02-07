@@ -1,10 +1,11 @@
 .page {
   min-height: 100vh;
-  background: #070a10;
-  color: rgba(255, 255, 255, 0.92);
+  background: #ffffff;   /* <-- change */
+  color: #000000;        /* <-- change */
   position: relative;
   overflow-x: hidden;
 }
+
 
 .page::before {
   content: "";
@@ -29,6 +30,10 @@
   opacity: 0.08;
   mix-blend-mode: overlay;
   z-index: 0;
+}
+.page::before,
+.page::after {
+  display: none;
 }
 
 .main {
