@@ -17,27 +17,33 @@ function groupLabel(key: GroupKey) {
   return "Todays Score";
 }
 
-// For now, everything you currently upload (premarket/afterhours) goes into Setup & Wrap.
-// Later, when you add new kinds, you can map them here.
 function groupForKind(kind: string): GroupKey {
   const k = (kind || "").toLowerCase();
 
-  // current kinds
   if (k === "premarket" || k === "afterhours") return "setup_wrap";
 
-  // future kinds (you'll add later)
+  // future buckets
   if (k === "monthly" || k === "monthly_pnl" || k === "macro") return "monthly_pnl_macro";
   if (k === "score" || k === "todays_score") return "todays_score";
 
-  // default bucket
   return "setup_wrap";
 }
 
 function sortNewestFirst(a: Post, b: Post) {
-  // If created_at is missing or funky, fallback to 0
   const ta = Date.parse(a.created_at || "") || 0;
   const tb = Date.parse(b.created_at || "") || 0;
   return tb - ta;
+}
+
+function coercePosts(json: any): Post[] {
+  // Accept either:
+  // 1) [ ...posts ]
+  // 2) { items: [ ...posts ] }
+  // 3) { posts: [ ...posts ] }
+  if (Array.isArray(json)) return json as Post[];
+  if (json && Array.isArray(json.items)) return json.items as Post[];
+  if (json && Array.isArray(json.posts)) return json.posts as Post[];
+  return [];
 }
 
 export default async function NewsletterIndexPage() {
@@ -56,8 +62,31 @@ export default async function NewsletterIndexPage() {
     );
   }
 
-  const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
-  const posts = (await res.json()) as Post[];
+  let posts: Post[] = [];
+  let errorText = "";
+
+  try {
+    const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
+
+    const raw = await res.text();
+    let json: any = null;
+
+    try {
+      json = raw ? JSON.parse(raw) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!res.ok) {
+      errorText = `API error (${res.status}). ${raw?.slice(0, 300) || ""}`;
+      posts = [];
+    } else {
+      posts = coercePosts(json);
+    }
+  } catch (e: any) {
+    errorText = e?.message || String(e);
+    posts = [];
+  }
 
   const grouped: Record<GroupKey, Post[]> = {
     setup_wrap: [],
@@ -65,11 +94,11 @@ export default async function NewsletterIndexPage() {
     todays_score: [],
   };
 
-  (posts || []).forEach((p) => {
+  // This will NEVER crash now, because posts is ALWAYS an array
+  posts.forEach((p) => {
     grouped[groupForKind(p.kind)].push(p);
   });
 
-  // sort within each group
   (Object.keys(grouped) as GroupKey[]).forEach((k) => {
     grouped[k] = grouped[k].sort(sortNewestFirst);
   });
@@ -79,7 +108,6 @@ export default async function NewsletterIndexPage() {
   return (
     <main className="bg-white text-black">
       <div className="mx-auto max-w-5xl px-6 py-14">
-        {/* Title: clean font, black text, centered */}
         <h1 className="text-4xl font-semibold tracking-tight text-center">
           Golden Valley Market Research Daily Newsletters
         </h1>
@@ -88,12 +116,22 @@ export default async function NewsletterIndexPage() {
           Clean archive of your posts — grouped by series.
         </p>
 
+        {errorText ? (
+          <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="font-semibold">Newsletter feed error</div>
+            <div className="mt-1 whitespace-pre-wrap">{errorText}</div>
+          </div>
+        ) : null}
+
         <div className="mt-12 space-y-10">
           {groupsInOrder.map((groupKey) => {
             const items = grouped[groupKey] || [];
 
             return (
-              <section key={groupKey} className="rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <section
+                key={groupKey}
+                className="rounded-2xl border border-gray-200 p-6 shadow-sm bg-white"
+              >
                 <div className="flex items-baseline justify-between gap-4">
                   <h2 className="text-xl font-semibold">{groupLabel(groupKey)}</h2>
                   <span className="text-xs text-gray-500">{items.length} posts</span>
@@ -120,7 +158,6 @@ export default async function NewsletterIndexPage() {
                           {p.title}
                         </Link>
 
-                        {/* Optional: show kind on the right, subtle */}
                         <span className="hidden sm:inline text-xs text-gray-500">
                           {(p.kind || "").toLowerCase() === "premarket"
                             ? "AM"
