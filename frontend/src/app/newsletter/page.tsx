@@ -1,76 +1,20 @@
 import Link from "next/link";
-import Image from "next/image";
-
-type GroupKey = "setup_wrap" | "monthly_pnl_macro" | "todays_score";
-
-const TILES: { key: GroupKey; label: string; cover: string }[] = [
-  {
-    key: "setup_wrap",
-    label: "The Setup & The Wrap",
-    cover: "/images/covers/setup-wrap.jpg",
-  },
-  {
-    key: "monthly_pnl_macro",
-    label: "Monthly P&L + Macro",
-    cover: "/images/covers/monthly-macro.jpg",
-  },
-  {
-    key: "todays_score",
-    label: "Today’s Score",
-    cover: "/images/covers/todays-score.jpg",
-  },
-];
 
 export default function NewsletterIndexPage() {
   return (
-    <main className="min-h-screen bg-[#070a10] text-white">
-      <div className="mx-auto max-w-6xl px-6 py-24">
-        {/* 3-tile grid */}
-        <div
-          data-grid="newsletter"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 20,
-          }}
-        >
-          {TILES.map((t) => (
-            <Link
-              key={t.key}
-              href={`/newsletter/series/${t.key}`}
-              className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
-            >
-              {/* Image container — hard height cap */}
-              <div className="relative h-56 w-full">
-                <Image
-                  src={t.cover}
-                  alt={t.label}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1024px) 33vw, 100vw"
-                  priority={t.key === "setup_wrap"}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/70 via-transparent to-transparent" />
-              </div>
+    <main style={{ minHeight: "100vh", background: "#070a10", color: "white", padding: 24 }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ fontSize: 12, opacity: 0.7 }}>DIAGNOSTIC</div>
+        <h1 style={{ fontSize: 28, marginTop: 10 }}>NEWSLETTER ROUTE OK ✅</h1>
+        <p style={{ opacity: 0.8, marginTop: 8 }}>
+          If you can see this text, /newsletter is rendering <code>src/app/newsletter/page.tsx</code>.
+        </p>
 
-              {/* Label */}
-              <div className="py-4 text-center">
-                <div className="text-lg font-semibold tracking-tight">
-                  {t.label}
-                </div>
-              </div>
-            </Link>
-          ))}
+        <div style={{ marginTop: 18 }}>
+          <Link href="/" style={{ color: "white", textDecoration: "underline" }}>
+            Home
+          </Link>
         </div>
-
-        {/* Mobile fallback */}
-        <style>{`
-          @media (max-width: 900px) {
-            div[data-grid="newsletter"] {
-              grid-template-columns: 1fr !important;
-            }
-          }
-        `}</style>
       </div>
     </main>
   );
