@@ -96,26 +96,36 @@ function coercePosts(json: any): Post[] {
 export default async function NewsletterSeriesPage({
   params,
 }: {
-  params: { [key: string]: string | string[] | undefined };
+  params: { group?: string } | Promise<{ group?: string }>;
 }) {
-  const raw =
-    (typeof params?.group === "string" && params.group) ||
-    (typeof params?.slug === "string" && params.slug) ||
-    (typeof params?.series === "string" && params.series) ||
-    "";
+  const p = await Promise.resolve(params as any);
+  const rawGroup = String(p?.group ?? "");
 
-  const rawGroup = raw.toString();
-  const group = VALID_GROUPS.includes(rawGroup as GroupKey) ? (rawGroup as GroupKey) : null;
+  const group = VALID_GROUPS.includes(rawGroup as GroupKey)
+    ? (rawGroup as GroupKey)
+    : null;
 
-  // ...rest of your file unchanged
-
-
-
+  // TEMP DEBUG (leave in until you confirm it works)
+  // If you still see "Unknown series", this will show what Next is passing.
   if (!group) {
     return (
       <main className="min-h-screen bg-[#070a10] text-white">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <h1 className="text-2xl font-semibold">Unknown series</h1>
+          <div className="mt-4 text-sm text-white/70">
+            <div>Expected one of: {VALID_GROUPS.join(", ")}</div>
+            <div className="mt-2">
+              Received params.group:{" "}
+              <span className="font-mono text-white">{rawGroup || "(empty)"}</span>
+            </div>
+            <div className="mt-2">
+              Full params:{" "}
+              <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/80">
+                {JSON.stringify(p, null, 2)}
+              </pre>
+            </div>
+          </div>
+
           <p className="mt-6">
             <Link
               href="/newsletter"
