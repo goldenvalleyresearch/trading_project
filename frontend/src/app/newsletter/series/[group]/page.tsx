@@ -11,12 +11,6 @@ type Post = {
 
 type GroupKey = "setup_wrap" | "monthly_pnl_macro" | "todays_score";
 
-const VALID_GROUPS: GroupKey[] = [
-  "setup_wrap",
-  "monthly_pnl_macro",
-  "todays_score",
-];
-
 const GROUP_META: Record<GroupKey, { label: string; cover: string }> = {
   setup_wrap: {
     label: "The Setup & The Wrap",
@@ -31,6 +25,21 @@ const GROUP_META: Record<GroupKey, { label: string; cover: string }> = {
     cover: "/images/covers/todays-score.jpg",
   },
 };
+
+/** Normalize ANY route input safely */
+function normalizeRouteGroup(input: string): GroupKey | null {
+  const k = (input || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s\-_]+/g, "");
+
+  if (["setupwrap"].includes(k)) return "setup_wrap";
+  if (["monthlypnlmacro", "monthlypnl", "macro"].includes(k))
+    return "monthly_pnl_macro";
+  if (["todaysscore", "score"].includes(k)) return "todays_score";
+
+  return null;
+}
 
 function normalizeKind(kind: string) {
   return (kind || "").toLowerCase().trim().replace(/[\s\-_]+/g, "");
@@ -62,7 +71,7 @@ function sortNewestFirst(a: Post, b: Post) {
 }
 
 function coercePosts(json: any): Post[] {
-  if (Array.isArray(json)) return json as Post[];
+  if (Array.isArray(json)) return json;
   if (json?.items && Array.isArray(json.items)) return json.items;
   if (json?.posts && Array.isArray(json.posts)) return json.posts;
   if (json?.data && Array.isArray(json.data)) return json.data;
@@ -75,17 +84,17 @@ export default async function NewsletterSeriesPage({
 }: {
   params: { group?: string };
 }) {
-  const rawGroup = String(params?.group ?? "");
-  const group = VALID_GROUPS.includes(rawGroup as GroupKey)
-    ? (rawGroup as GroupKey)
-    : null;
+  const group = normalizeRouteGroup(params?.group ?? "");
 
   if (!group) {
     return (
       <main className="min-h-screen bg-[#070a10] text-white">
         <div className="mx-auto max-w-6xl px-6 py-14">
           <h1 className="text-2xl font-semibold">Unknown series</h1>
-          <Link href="/newsletter" className="mt-6 inline-flex text-sm text-white/80 hover:text-white">
+          <Link
+            href="/newsletter"
+            className="mt-6 inline-flex text-sm text-white/80 hover:text-white"
+          >
             Back
           </Link>
         </div>
@@ -122,7 +131,7 @@ export default async function NewsletterSeriesPage({
   return (
     <main className="min-h-screen bg-[#070a10] text-white">
       <div className="mx-auto max-w-6xl px-6 py-14">
-        {/* HEADER */}
+        {/* Header */}
         <div className="flex items-end justify-between gap-6">
           <div>
             <div className="text-xs text-white/60">Archive</div>
@@ -134,32 +143,28 @@ export default async function NewsletterSeriesPage({
             </p>
           </div>
 
-          <Link href="/newsletter" className="text-sm text-white/80 hover:text-white">
+          <Link
+            href="/newsletter"
+            className="text-sm text-white/80 hover:text-white"
+          >
             Back
           </Link>
         </div>
 
-        {/* ERROR */}
         {errorText && (
           <div className="mt-10 rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
             {errorText}
           </div>
         )}
 
-        {/* GRID */}
+        {/* GRID — SAME AS LANDING */}
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((p) => (
             <Link
               key={p.slug}
               href={`/newsletter/${p.slug}`}
-              className="
-                group block overflow-hidden rounded-2xl
-                border border-white/10 bg-white/5
-                hover:bg-white/10 transition
-                no-underline
-              "
+              className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
             >
-              {/* IMAGE */}
               <div className="relative h-44 w-full overflow-hidden">
                 <img
                   src={meta.cover}
@@ -169,13 +174,11 @@ export default async function NewsletterSeriesPage({
                 <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/80 via-[#070a10]/20 to-transparent" />
               </div>
 
-              {/* TEXT */}
               <div className="p-6">
-                <h3 className="text-lg font-semibold leading-snug text-white">
+                <h3 className="text-lg font-semibold leading-snug">
                   {p.title}
                 </h3>
-
-                <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-white/80">
+                <div className="mt-4 inline-flex items-center gap-2 text-sm text-white/80">
                   Read <span className="text-white/50">→</span>
                 </div>
               </div>
@@ -186,4 +189,3 @@ export default async function NewsletterSeriesPage({
     </main>
   );
 }
-
