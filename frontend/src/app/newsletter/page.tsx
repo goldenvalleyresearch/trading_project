@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 type GroupKey = "setup_wrap" | "monthly_pnl_macro" | "todays_score";
 
@@ -11,8 +12,9 @@ const TILES: { key: GroupKey; label: string; cover: string }[] = [
 export default function NewsletterIndexPage() {
   return (
     <main className="min-h-screen bg-[#070a10] text-white">
-      <div className="mx-auto max-w-6xl px-6 py-16">
-        <div className="grid gap-5 md:grid-cols-3">
+      <div className="mx-auto max-w-6xl px-6 py-12">
+        {/* Grid */}
+        <div className="grid gap-6 md:grid-cols-3">
           {TILES.map((t) => (
             <Link
               key={t.key}
@@ -20,22 +22,28 @@ export default function NewsletterIndexPage() {
               className="
                 group block overflow-hidden rounded-2xl border border-white/10 bg-white/5
                 hover:bg-white/10 transition
-                text-white no-underline
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30
               "
             >
-              {/* hard cap: image can never exceed 190px tall */}
-              <div className="relative h-[190px] w-full overflow-hidden">
-                <img
+              {/* Image area: fixed height card */}
+              <div className="relative h-48 w-full md:h-56">
+                <Image
                   src={t.cover}
                   alt={t.label}
-                  className="h-full w-full object-cover block"
-                  draggable={false}
+                  fill
+                  sizes="(min-width: 768px) 33vw, 100vw"
+                  className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                  priority={t.key === "setup_wrap"}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/70 via-[#070a10]/10 to-transparent" />
+                {/* soft overlay so text area feels premium */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/65 via-[#070a10]/10 to-transparent" />
               </div>
 
-              <div className="p-4 text-center">
-                <div className="text-lg font-semibold tracking-tight">{t.label}</div>
+              {/* Label BELOW image */}
+              <div className="p-5">
+                <div className="text-center text-lg font-semibold tracking-tight">
+                  {t.label}
+                </div>
               </div>
             </Link>
           ))}
