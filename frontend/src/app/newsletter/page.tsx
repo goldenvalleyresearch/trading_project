@@ -11,37 +11,60 @@ const TILES: { key: GroupKey; label: string; cover: string }[] = [
 
 export default function NewsletterIndexPage() {
   return (
-    <main className="min-h-screen bg-[#070a10] text-white">
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        {/* Grid */}
-        <div className="grid gap-6 md:grid-cols-3">
+    <main style={{ minHeight: "100vh", background: "#070a10", color: "white" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 20px" }}>
+        {/* 3-tile row */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 18,
+          }}
+        >
           {TILES.map((t) => (
             <Link
               key={t.key}
               href={`/newsletter/series/${t.key}`}
-              className="
-                group block overflow-hidden rounded-2xl border border-white/10 bg-white/5
-                hover:bg-white/10 transition
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30
-              "
+              style={{
+                display: "block",
+                textDecoration: "none",
+                color: "inherit",
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: 18,
+                overflow: "hidden",
+              }}
             >
-              {/* Image area: fixed height card */}
-              <div className="relative h-48 w-full md:h-56">
+              {/* GUARANTEED SIZE: aspect ratio box */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "16 / 9",
+                  overflow: "hidden",
+                }}
+              >
                 <Image
                   src={t.cover}
                   alt={t.label}
                   fill
-                  sizes="(min-width: 768px) 33vw, 100vw"
-                  className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  style={{ objectFit: "cover" }}
                   priority={t.key === "setup_wrap"}
                 />
-                {/* soft overlay so text area feels premium */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/65 via-[#070a10]/10 to-transparent" />
+                {/* darken for readability */}
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "linear-gradient(to top, rgba(7,10,16,0.75), rgba(7,10,16,0.10), rgba(7,10,16,0.00))",
+                  }}
+                />
               </div>
 
-              {/* Label BELOW image */}
-              <div className="p-5">
-                <div className="text-center text-lg font-semibold tracking-tight">
+              <div style={{ padding: "14px 14px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em" }}>
                   {t.label}
                 </div>
               </div>
@@ -49,6 +72,13 @@ export default function NewsletterIndexPage() {
           ))}
         </div>
       </div>
+
+      {/* mobile stacking */}
+      <style>{`
+        @media (max-width: 900px) {
+          div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </main>
   );
 }
