@@ -25,15 +25,16 @@ export default function NewsletterIndexPage() {
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30
               "
             >
+              {/* Image has a fixed-height container so it can’t take over the page */}
               <div className="relative h-56 w-full">
                 <Image
                   src={t.cover}
                   alt={t.label}
                   fill
-                  priority
+                  sizes="(max-width: 1024px) 100vw, 33vw"
                   className="object-cover opacity-95 transition group-hover:opacity-100"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/70 via-[#070a10]/10 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/75 via-[#070a10]/10 to-transparent" />
               </div>
 
               <div className="p-5">
