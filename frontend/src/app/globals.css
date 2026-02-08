@@ -25,3 +25,6 @@ button {
 .font-times {
   font-family: "Times New Roman", Times, serif;
 }
+
+a { color: inherit; text-decoration: none; }
+a:visited { color: inherit; }

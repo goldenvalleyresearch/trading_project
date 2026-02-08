@@ -178,12 +178,10 @@ export default function NewsletterPostPage() {
         </div>
 
         <header className="mt-10">
-          <div className="text-xs text-white/60">{stamp}</div>
-          <h1 className="mt-3 text-4xl font-semibold leading-tight tracking-tight">
-            {post.title}
-          </h1>
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight">{post.title}</h1>
           <div className="mt-6 h-px w-full bg-white/10" />
         </header>
+
 
         <article
           className="
