@@ -12,28 +12,33 @@ type Post = {
 type GroupKey = "setup_wrap" | "monthly_pnl_macro" | "todays_score";
 
 const GROUP_META: Record<GroupKey, { label: string; cover: string }> = {
-  setup_wrap: { label: "The Setup & The Wrap", cover: "/images/covers/setup-wrap.jpg" },
-  monthly_pnl_macro: { label: "Monthly P&L + Macro", cover: "/images/covers/monthly-macro.jpg" },
-  todays_score: { label: "Today’s Score", cover: "/images/covers/todays-score.jpg" },
+  setup_wrap: {
+    label: "The Setup & The Wrap",
+    cover: "/images/covers/setup-wrap.jpg",
+  },
+  monthly_pnl_macro: {
+    label: "Monthly P&L + Macro",
+    cover: "/images/covers/monthly-macro.jpg",
+  },
+  todays_score: {
+    label: "Today’s Score",
+    cover: "/images/covers/todays-score.jpg",
+  },
 };
 
 function normalizeToken(input: string) {
   return (input || "")
     .toLowerCase()
     .trim()
-    .replace(/%2F/g, "/")
-    .replace(/%20/g, " ")
     .replace(/[\s\-_]+/g, "");
 }
 
-/** Normalize ANY route input safely */
 function normalizeRouteGroup(input: string): GroupKey | null {
   const k = normalizeToken(input);
-
   if (k === "setupwrap") return "setup_wrap";
-  if (k === "monthlypnlmacro" || k === "monthlypnl" || k === "macro") return "monthly_pnl_macro";
+  if (k === "monthlypnlmacro" || k === "monthlypnl" || k === "macro")
+    return "monthly_pnl_macro";
   if (k === "todaysscore" || k === "score") return "todays_score";
-
   return null;
 }
 
@@ -43,13 +48,15 @@ function normalizeKind(kind: string) {
 
 function groupForKind(kind: string): GroupKey {
   const k = normalizeKind(kind);
-
-  if (["premarket", "am", "morning", "setup", "afterhours", "pm", "wrap", "close", "postclose"].includes(k))
+  if (
+    ["premarket", "am", "morning", "setup", "afterhours", "pm", "wrap", "close", "postclose"].includes(
+      k
+    )
+  )
     return "setup_wrap";
-
-  if (["monthly", "monthlypnl", "macro"].includes(k)) return "monthly_pnl_macro";
+  if (["monthly", "monthlypnl", "macro"].includes(k))
+    return "monthly_pnl_macro";
   if (["score", "todayscore"].includes(k)) return "todays_score";
-
   return "setup_wrap";
 }
 
@@ -69,36 +76,17 @@ function coercePosts(json: any): Post[] {
 export default async function NewsletterSeriesPage({
   params,
 }: {
-  // IMPORTANT: handle both object params and Promise params (your project has shown this behavior)
   params: { group?: string } | Promise<{ group?: string }>;
 }) {
-  // ✅ This is the key fix
   const p = await Promise.resolve(params as any);
-  const raw = String(p?.group ?? "");
-  const group = normalizeRouteGroup(raw);
+  const group = normalizeRouteGroup(p?.group ?? "");
 
   if (!group) {
     return (
       <main className="min-h-screen bg-[#070a10] text-white">
         <div className="mx-auto max-w-6xl px-6 py-14">
           <h1 className="text-2xl font-semibold">Unknown series</h1>
-
-          {/* Debug info so we can END this forever */}
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-            <div>
-              <span className="text-white/50">params.group:</span>{" "}
-              <span className="font-mono text-white">{raw || "(empty)"}</span>
-            </div>
-            <div className="mt-1">
-              <span className="text-white/50">normalized:</span>{" "}
-              <span className="font-mono text-white">{normalizeToken(raw) || "(empty)"}</span>
-            </div>
-            <div className="mt-1 text-white/50">
-              Valid: setup_wrap, monthly_pnl_macro, todays_score (also accepts dashes/spaces)
-            </div>
-          </div>
-
-          <Link href="/newsletter" className="mt-6 inline-flex text-sm text-white/80 hover:text-white">
+          <Link href="/newsletter" className="mt-6 inline-block text-sm text-white/80">
             Back
           </Link>
         </div>
@@ -107,34 +95,28 @@ export default async function NewsletterSeriesPage({
   }
 
   let posts: Post[] = [];
-  let errorText = "";
 
-  if (!API) {
-    errorText = "NEXT_PUBLIC_API_BASE_URL is not defined.";
-  } else {
-    try {
-      const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
-      const rawText = await res.text();
-      const json = rawText ? JSON.parse(rawText) : null;
+  const res = await fetch(`${API}/api/newsletter/posts`, { cache: "no-store" });
+  const json = await res.json();
+  posts = coercePosts(json)
+    .filter((p) => groupForKind(p.kind) === group)
+    .sort(sortNewestFirst);
 
-      if (!res.ok) errorText = rawText?.slice(0, 800) || `API error (${res.status})`;
-      else posts = coercePosts(json);
-    } catch (e: any) {
-      errorText = e?.message || String(e);
-    }
-  }
-
-  const filtered = posts.filter((x) => groupForKind(x.kind) === group).sort(sortNewestFirst);
   const meta = GROUP_META[group];
 
   return (
     <main className="min-h-screen bg-[#070a10] text-white">
       <div className="mx-auto max-w-6xl px-6 py-14">
+        {/* Header */}
         <div className="flex items-end justify-between gap-6">
           <div>
             <div className="text-xs text-white/60">Archive</div>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">{meta.label}</h1>
-            <p className="mt-3 text-sm text-white/70">Headlines only. Clean browse.</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-tight">
+              {meta.label}
+            </h1>
+            <p className="mt-3 text-sm text-white/70">
+              Headlines only. Clean browse.
+            </p>
           </div>
 
           <Link href="/newsletter" className="text-sm text-white/80 hover:text-white">
@@ -142,32 +124,37 @@ export default async function NewsletterSeriesPage({
           </Link>
         </div>
 
-        {errorText ? (
-          <div className="mt-10 rounded-xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
-            <div className="font-semibold">Feed error</div>
-            <div className="mt-2 whitespace-pre-wrap">{errorText}</div>
-          </div>
-        ) : null}
-
-        {/* 3 cards per row + scroll */}
+        {/* 🔥 LOCKED GRID — EXACTLY 3 PER ROW */}
         <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((p) => (
+          {posts.map((p) => (
             <Link
               key={p.slug}
               href={`/newsletter/${p.slug}`}
-              className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition"
+              className="
+                group
+                block
+                w-full
+                overflow-hidden
+                rounded-2xl
+                border border-white/10
+                bg-white/5
+                hover:bg-white/10
+                transition
+              "
             >
               <div className="relative h-44 w-full overflow-hidden">
                 <img
                   src={meta.cover}
                   alt={meta.label}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#070a10]/80 via-[#070a10]/20 to-transparent" />
               </div>
 
               <div className="p-6">
-                <h3 className="text-lg font-semibold leading-snug">{p.title}</h3>
+                <h3 className="text-lg font-semibold leading-snug">
+                  {p.title}
+                </h3>
                 <div className="mt-4 inline-flex items-center gap-2 text-sm text-white/80">
                   Read <span className="text-white/50">→</span>
                 </div>
