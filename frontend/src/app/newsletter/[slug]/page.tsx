@@ -115,7 +115,15 @@ export default function NewsletterPostPage() {
 
       
 
-      <article className="prose prose-lg max-w-none">
+      <article className="prose prose-lg max-w-none
+        prose-a:text-black
+        prose-a:underline
+        prose-a:decoration-black/30
+        hover:prose-a:decoration-black/70
+        prose-a:visited:text-black
+      ">
+
+
 
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {normalizeBullets(post.content_md ?? "")}

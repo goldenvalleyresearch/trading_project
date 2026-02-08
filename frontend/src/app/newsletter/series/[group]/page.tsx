@@ -96,10 +96,20 @@ function coercePosts(json: any): Post[] {
 export default async function NewsletterSeriesPage({
   params,
 }: {
-  params: { group: string };
+  params: { [key: string]: string | string[] | undefined };
 }) {
-  const rawGroup = (params?.group ?? "").toString();
+  const raw =
+    (typeof params?.group === "string" && params.group) ||
+    (typeof params?.slug === "string" && params.slug) ||
+    (typeof params?.series === "string" && params.series) ||
+    "";
+
+  const rawGroup = raw.toString();
   const group = VALID_GROUPS.includes(rawGroup as GroupKey) ? (rawGroup as GroupKey) : null;
+
+  // ...rest of your file unchanged
+
+
 
   if (!group) {
     return (
