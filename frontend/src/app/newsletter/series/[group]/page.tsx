@@ -52,16 +52,6 @@ function coercePosts(json: any): Post[] {
   return [];
 }
 
-function formatDateShort(iso: string) {
-  const t = Date.parse(iso || "");
-  if (!t) return "";
-  return new Date(t).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 export default async function NewsletterSeriesPage({
   params,
 }: {
@@ -109,26 +99,12 @@ export default async function NewsletterSeriesPage({
   return (
     <main style={{ minHeight: "100vh", background: "#070a10", color: "white" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 20px" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 18 }}>
-          <div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Archive</div>
-            <h1 style={{ marginTop: 10, fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em" }}>{meta.label}</h1>
-            <p style={{ marginTop: 10, fontSize: 14, color: "rgba(255,255,255,.7)" }}>
-              Headlines only. Clean browse.
-            </p>
-          </div>
-
-          <Link
-            href="/newsletter"
-            style={{
-              fontSize: 14,
-              color: "rgba(255,255,255,.8)",
-              textDecoration: "none",
-            }}
-          >
-            Back
-          </Link>
+        {/* Header (no "Archive", no Back button) */}
+        <div>
+          <h1 style={{ fontSize: 56, fontWeight: 700, letterSpacing: "-0.02em" }}>{meta.label}</h1>
+          <p style={{ marginTop: 10, fontSize: 14, color: "rgba(255,255,255,.7)" }}>
+            Headlines only. Clean browse.
+          </p>
         </div>
 
         {errorText ? (
@@ -149,7 +125,7 @@ export default async function NewsletterSeriesPage({
           </div>
         ) : null}
 
-        {/* ✅ TILE GRID (same style language as landing page) */}
+        {/* Tiles */}
         <div
           style={{
             marginTop: 28,
@@ -176,7 +152,6 @@ export default async function NewsletterSeriesPage({
                   overflow: "hidden",
                 }}
               >
-                {/* aspect ratio box (same as landing) */}
                 <div
                   style={{
                     position: "relative",
@@ -194,7 +169,6 @@ export default async function NewsletterSeriesPage({
                     priority={false}
                   />
 
-                  {/* darken for readability */}
                   <div
                     style={{
                       position: "absolute",
@@ -204,7 +178,7 @@ export default async function NewsletterSeriesPage({
                     }}
                   />
 
-                  {/* title overlay */}
+                  {/* Title only (no date) */}
                   <div
                     style={{
                       position: "absolute",
@@ -216,9 +190,6 @@ export default async function NewsletterSeriesPage({
                     }}
                   >
                     <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em" }}>{post.title}</div>
-                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
-                      {formatDateShort(post.created_at)}
-                    </div>
                   </div>
                 </div>
               </Link>
