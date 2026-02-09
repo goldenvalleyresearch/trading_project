@@ -2,16 +2,13 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-
-  /* Solid background fixes the white glow/haze over bright hero areas */
   background: rgba(7, 10, 16, 0.98);
-
-  /* Removed blur – this is a major cause of the weird glow seam */
-  backdrop-filter: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .inner {
+  position: relative;
+  z-index: 2; /* ensures links sit above everything */
   width: min(1120px, calc(100% - 44px));
   margin: 0 auto;
   padding: 12px 0;
@@ -19,7 +16,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  position: relative;
 }
 
 .brand {
@@ -29,7 +25,6 @@
   text-decoration: none;
   color: rgba(255, 255, 255, 0.96);
   user-select: none;
-  min-width: 0;
 }
 
 .logoWrap {
@@ -38,29 +33,12 @@
   border-radius: 18px;
   position: relative;
   overflow: visible;
-  flex: 0 0 auto;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
-}
-
-.logoWrap::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 20px;
-  background: radial-gradient(120% 120% at 30% 20%, rgba(255, 215, 120, 0.35), rgba(0, 0, 0, 0.45));
-  border: 1px solid rgba(255, 215, 120, 0.32);
-  box-shadow: inset 0 0 0 1px rgba(255, 215, 120, 0.14);
-  pointer-events: none;
-  opacity: 0.35;
 }
 
 .logo {
   object-fit: contain;
-  object-position: center;
   transform: scale(1.65);
-  transform-origin: center;
   filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.55));
-  pointer-events: none;
 }
 
 .wordmark {
@@ -68,16 +46,15 @@
   font-weight: 900;
   letter-spacing: -0.015em;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.95);
 }
+
+/* ---------- NAV ---------- */
 
 .nav {
   display: flex;
   align-items: center;
   gap: 14px;
-  min-width: 0;
 }
 
 .links {
@@ -86,24 +63,25 @@
   gap: 10px;
 }
 
-.navLink {
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.88); /* ↑ was too faint before */
+/* 🔥 THIS IS THE FIX */
+.header .links a {
+  color: rgba(255, 255, 255, 0.92);
   font-size: 13px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 999px;
+  text-decoration: none;
   border: 1px solid transparent;
-  white-space: nowrap;
-  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-
-.navLink:hover {
-  color: rgba(255, 255, 255, 0.96);
-  border-color: rgba(255, 215, 120, 0.22);
-  background: rgba(255, 215, 120, 0.06);
+.header .links a:hover {
+  color: rgba(255, 255, 255, 1);
+  background: rgba(255, 215, 120, 0.08);
+  border-color: rgba(255, 215, 120, 0.28);
   transform: translateY(-1px);
 }
+
+/* ---------- ACTIONS ---------- */
 
 .actions {
   display: inline-flex;
@@ -115,121 +93,17 @@
   font-size: 13px;
   padding: 10px 14px;
   border-radius: 999px;
-  white-space: nowrap;
   color: rgba(10, 12, 16, 0.96);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.70);
-  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
-}
-
-.cta:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  filter: brightness(1.03);
+  background: linear-gradient(180deg, #ffffff, #f0f0f0);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 
 .menuBtn {
   display: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(12px);
-  cursor: pointer;
-  position: relative;
-  transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
 }
 
-.menuBtn:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 215, 120, 0.22);
-}
-
-.menuBars {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 16px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.92);
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
-}
-
-.menuBars::before,
-.menuBars::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 16px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 999px;
-}
-
-.menuBars::before {
-  top: -5px;
-}
-
-.menuBars::after {
-  top: 5px;
-}
-
-.mobileWrap {
-  display: none;
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 40;
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-
-.mobileMenu {
-  position: fixed;
-  top: 74px;
-  right: 12px;
-  width: min(320px, calc(100vw - 24px));
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(7, 10, 16, 0.94);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-  padding: 10px;
-  z-index: 60;
-  display: grid;
-  gap: 8px;
-}
-
-.mobileLink {
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.92);
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.mobileCta {
-  padding: 12px;
-  border-radius: 14px;
-  color: #0b0f14;
-  background: rgba(255, 255, 255, 0.92);
-  font-weight: 700;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-}
-
-.mobileOpen {
-  display: block;
-}
+/* ---------- MOBILE ---------- */
 
 @media (max-width: 980px) {
   .links {
@@ -238,44 +112,5 @@
 
   .menuBtn {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-@media (max-width: 520px) {
-  .inner {
-    width: calc(100% - 30px);
-    padding: 10px 0;
-  }
-
-  .logoWrap {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-  }
-
-  .logo {
-    transform: scale(1.75);
-  }
-
-  .wordmark {
-    display: none;
-  }
-
-  .cta {
-    font-size: 12px;
-    padding: 9px 12px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .navLink,
-  .cta,
-  .menuBtn,
-  .mobileLink,
-  .mobileCta {
-    transition: none !important;
-    animation: none !important;
   }
 }
