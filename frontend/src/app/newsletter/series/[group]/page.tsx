@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -18,6 +19,8 @@ const GROUP_META: Record<GroupKey, { label: string; cover: string }> = {
   todays_score: { label: "Today’s Score", cover: "/images/covers/todays-score.jpg" },
 };
 
+const VALID_GROUPS: GroupKey[] = ["setup_wrap", "monthly_pnl_macro", "todays_score"];
+
 function normalizeKind(kind: string) {
   return (kind || "").toLowerCase().trim().replace(/[\s\-_]+/g, "");
 }
@@ -25,7 +28,9 @@ function normalizeKind(kind: string) {
 function groupForKind(kind: string): GroupKey {
   const k = normalizeKind(kind);
 
-  if (["premarket", "am", "morning", "setup", "afterhours", "pm", "wrap", "close", "postclose"].includes(k)) {
+  if (
+    ["premarket", "am", "morning", "setup", "afterhours", "pm", "wrap", "close", "postclose"].includes(k)
+  ) {
     return "setup_wrap";
   }
   if (["monthly", "monthlypnl", "macro"].includes(k)) return "monthly_pnl_macro";
@@ -33,10 +38,6 @@ function groupForKind(kind: string): GroupKey {
 
   return "setup_wrap";
 }
-
-// IMPORTANT: route param is already "setup_wrap" etc.
-// Don’t over-normalize it. Just validate.
-const VALID_GROUPS: GroupKey[] = ["setup_wrap", "monthly_pnl_macro", "todays_score"];
 
 function sortNewestFirst(a: Post, b: Post) {
   return (Date.parse(b.created_at || "") || 0) - (Date.parse(a.created_at || "") || 0);
@@ -51,6 +52,16 @@ function coercePosts(json: any): Post[] {
   return [];
 }
 
+function formatDateShort(iso: string) {
+  const t = Date.parse(iso || "");
+  if (!t) return "";
+  return new Date(t).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default async function NewsletterSeriesPage({
   params,
 }: {
@@ -62,13 +73,10 @@ export default async function NewsletterSeriesPage({
 
   if (!group) {
     return (
-      <main className="min-h-screen bg-[#070a10] text-white">
-        <div className="mx-auto max-w-6xl px-6 py-14">
-          <h1 className="text-2xl font-semibold">Unknown series</h1>
-          <Link
-            href="/newsletter"
-            className="mt-6 inline-flex text-sm text-white/80 hover:text-white transition"
-          >
+      <main style={{ minHeight: "100vh", background: "#070a10", color: "white" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 20px" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 600 }}>Unknown series</h1>
+          <Link href="/newsletter" style={{ display: "inline-flex", marginTop: 18, color: "rgba(255,255,255,.8)" }}>
             Back
           </Link>
         </div>
@@ -99,30 +107,57 @@ export default async function NewsletterSeriesPage({
   const filtered = posts.filter((x) => groupForKind(x.kind) === group).sort(sortNewestFirst);
 
   return (
-    <main className="min-h-screen bg-[#070a10] text-white">
-      <div className="mx-auto max-w-6xl px-6 py-14">
+    <main style={{ minHeight: "100vh", background: "#070a10", color: "white" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 20px" }}>
         {/* Header */}
-        <div className="flex items-end justify-between gap-6">
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 18 }}>
           <div>
-            <div className="text-xs text-white/60">Archive</div>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">{meta.label}</h1>
-            <p className="mt-3 text-sm text-white/70">Headlines only. Clean browse.</p>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Archive</div>
+            <h1 style={{ marginTop: 10, fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em" }}>{meta.label}</h1>
+            <p style={{ marginTop: 10, fontSize: 14, color: "rgba(255,255,255,.7)" }}>
+              Headlines only. Clean browse.
+            </p>
           </div>
 
-          <Link href="/newsletter" className="text-sm text-white/80 hover:text-white transition">
+          <Link
+            href="/newsletter"
+            style={{
+              fontSize: 14,
+              color: "rgba(255,255,255,.8)",
+              textDecoration: "none",
+            }}
+          >
             Back
           </Link>
         </div>
 
         {errorText ? (
-          <div className="mt-10 rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
-            <div className="font-semibold">Feed error</div>
-            <div className="mt-2 whitespace-pre-wrap">{errorText}</div>
+          <div
+            style={{
+              marginTop: 24,
+              borderRadius: 18,
+              border: "1px solid rgba(239,68,68,.35)",
+              background: "rgba(239,68,68,.12)",
+              padding: 16,
+              fontSize: 13,
+              color: "rgba(254,226,226,1)",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Feed error</div>
+            {errorText}
           </div>
         ) : null}
 
-        {/* ✅ SAME CARD STYLE AS LANDING (backgroundImage, no <Image fill />) */}
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {/* ✅ TILE GRID (same style language as landing page) */}
+        <div
+          style={{
+            marginTop: 28,
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 18,
+          }}
+        >
           {filtered.map((post) => {
             // future: const cover = post.cover_url || meta.cover;
             const cover = meta.cover;
@@ -131,25 +166,59 @@ export default async function NewsletterSeriesPage({
               <Link
                 key={post.slug}
                 href={`/newsletter/${post.slug}`}
-                className="
-                  group block overflow-hidden rounded-2xl border border-white/10 bg-white/5
-                  hover:bg-white/10 transition
-                  text-white no-underline visited:text-white hover:text-white
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30
-                "
+                style={{
+                  display: "block",
+                  textDecoration: "none",
+                  color: "inherit",
+                  border: "1px solid rgba(255,255,255,0.10)",
+                  background: "rgba(255,255,255,0.04)",
+                  borderRadius: 18,
+                  overflow: "hidden",
+                }}
               >
+                {/* aspect ratio box (same as landing) */}
                 <div
-                  className="h-56 w-full opacity-95 group-hover:opacity-100 transition"
                   style={{
-                    backgroundImage: `linear-gradient(to top, rgba(7,10,16,.75), rgba(7,10,16,.10)), url(${cover})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
+                    position: "relative",
+                    width: "100%",
+                    aspectRatio: "16 / 9",
+                    overflow: "hidden",
                   }}
-                />
-                <div className="p-6">
-                  <div className="text-lg font-semibold leading-snug">{post.title}</div>
-                  <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-white/90">
-                    Read <span className="text-white/60">→</span>
+                >
+                  <Image
+                    src={cover}
+                    alt={post.title}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    style={{ objectFit: "cover" }}
+                    priority={false}
+                  />
+
+                  {/* darken for readability */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background:
+                        "linear-gradient(to top, rgba(7,10,16,0.85), rgba(7,10,16,0.15), rgba(7,10,16,0.00))",
+                    }}
+                  />
+
+                  {/* title overlay */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      padding: "14px 14px 16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em" }}>{post.title}</div>
+                    <div style={{ marginTop: 6, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
+                      {formatDateShort(post.created_at)}
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -158,11 +227,28 @@ export default async function NewsletterSeriesPage({
         </div>
 
         {!errorText && filtered.length === 0 ? (
-          <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+          <div
+            style={{
+              marginTop: 24,
+              borderRadius: 18,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.04)",
+              padding: 16,
+              fontSize: 14,
+              color: "rgba(255,255,255,.70)",
+            }}
+          >
             No posts in this series yet.
           </div>
         ) : null}
       </div>
+
+      {/* mobile stacking: 3 -> 1 */}
+      <style>{`
+        @media (max-width: 900px) {
+          div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </main>
   );
 }
