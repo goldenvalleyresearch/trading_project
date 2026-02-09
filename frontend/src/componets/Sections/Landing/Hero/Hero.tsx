@@ -1,4 +1,3 @@
-// src/componets/Sections/Hero/Hero.tsx
 "use client";
 
 import Image from "next/image";
@@ -9,8 +8,6 @@ type HeroProps = {
   bgAlt?: string;
   title?: string;
   subtitle?: string;
-  ctaHref?: string;
-  ctaText?: string;
   asOf?: string;
 };
 
@@ -19,8 +16,6 @@ export default function Hero({
   bgAlt = "Markets background",
   title = "Generating Alpha\nThrough\nAnalysis",
   subtitle = "A research-driven tool designed to surface high-quality stock setups by aligning fundamental strength and technical signals in the same direction, with a disciplined focus on risk.",
-  ctaHref = "/newsletter",
-  ctaText = "Get Started Today",
   asOf,
 }: HeroProps) {
   return (
@@ -49,12 +44,6 @@ export default function Hero({
           </h1>
 
           <p className={styles.subtitle}>{subtitle}</p>
-
-          <div className={styles.actions}>
-            <a className={styles.primary} href={ctaHref}>
-              {ctaText}
-            </a>
-          </div>
 
           {asOf ? (
             <div className={styles.meta}>

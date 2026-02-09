@@ -3,17 +3,12 @@
   top: 0;
   z-index: 50;
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
-  background: linear-gradient(180deg, rgba(7, 10, 16, 0.92), rgba(7, 10, 16, 0.78));
-  backdrop-filter: blur(16px);
-}
 
-.header::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(700px 120px at 8% 0%, rgba(255, 215, 120, 0.10), transparent 60%);
-  opacity: 1;
+  /* Solid background fixes the white glow/haze over bright hero areas */
+  background: rgba(7, 10, 16, 0.98);
+
+  /* Removed blur – this is a major cause of the weird glow seam */
+  backdrop-filter: none;
 }
 
 .inner {
