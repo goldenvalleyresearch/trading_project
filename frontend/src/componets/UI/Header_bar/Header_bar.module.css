@@ -88,7 +88,7 @@
 
 .navLink {
   text-decoration: none;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.88); /* ↑ was too faint before */
   font-size: 13px;
   padding: 8px 10px;
   border-radius: 999px;
@@ -96,6 +96,7 @@
   white-space: nowrap;
   transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
+
 
 .navLink:hover {
   color: rgba(255, 255, 255, 0.96);
