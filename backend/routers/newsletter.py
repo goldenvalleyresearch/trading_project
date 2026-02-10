@@ -28,8 +28,18 @@ def slugify(s: str):
 
 # ---------- MODELS ----------
 
-# ✅ expanded kinds to support Monthly P&L + Macro
-PostKind = Literal["premarket", "afterhours", "monthly", "monthly_pnl", "macro"]
+# ✅ expanded kinds to support:
+# - Monthly P&L + Macro
+# - Today's Score (daily score posts)
+PostKind = Literal[
+    "premarket",
+    "afterhours",
+    "monthly",
+    "monthly_pnl",
+    "macro",
+    "score",
+    "todays_score",
+]
 
 class PostCreateReq(BaseModel):
     title: str
