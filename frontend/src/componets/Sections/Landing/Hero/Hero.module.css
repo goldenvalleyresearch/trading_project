@@ -147,17 +147,7 @@
   stroke-width: 1;
 }
 
-/* dot pulse */
-.currentDot {
-  fill: rgba(255, 215, 120, 0.95);
-  filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.35));
-  animation: dotPulse 1.8s ease-in-out infinite;
-}
 
-@keyframes dotPulse {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50%      { transform: scale(1.18); opacity: 1; }
-}
 
 /* Mobile */
 @media (max-width: 980px) {
@@ -185,8 +175,7 @@
 
 /* Accessibility: reduce motion */
 @media (prefers-reduced-motion: reduce) {
-  .candle,
-  .currentDot {
+  .candle {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;

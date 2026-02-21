@@ -222,16 +222,7 @@ export default function Hero({
                 );
               })}
 
-              {/* current marker follows last printed candle */}
-              {visibleCount > 0 ? (
-                <circle
-                  key={cycle} // restart pulse each cycle
-                  cx={x(lastIdx)}
-                  cy={y(candles[lastIdx].c)}
-                  r="4.5"
-                  className={styles.currentDot}
-                />
-              ) : null}
+              
             </g>
           </svg>
         </div>
