@@ -45,7 +45,7 @@ type Props = {
 
 type Point = { d: string; v: number };
 type ChartRow = { d: string; p: number | null; b: number | null; b2: number | null };
-type ChartRowT = { d: string; t: number; p: number | null; b: number | null; b2: number | null };
+type ChartRowT = { d: string; t: number; p: number | null; pGlow: number | null; b: number | null; b2: number | null };
 
 const TZ = "America/Chicago";
 
@@ -427,7 +427,7 @@ export default function EquityPreview({
     const rows = rebased
       .filter((r) => r.d.length === 10)
       .filter((r) => !isWeekendISO(r.d))
-      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b, b2: r.b2 }))
+      .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p,pGlow: r.p, b: r.b, b2: r.b2 }))
       .filter((r) => Number.isFinite(r.t))
       .sort((a, b) => a.t - b.t);
 
@@ -519,18 +519,16 @@ export default function EquityPreview({
           <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
           <YAxis hide domain={["auto", "auto"]} />
           <XAxis
-            type="number"
-            scale="time"
-            dataKey="t"
+            dataKey="d"
             axisLine={false}
             tickLine={false}
             interval={xInterval as any}
             minTickGap={12}
             tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-            tickFormatter={tickFormatter as any}
-            domain={["dataMin", "dataMax"]}
-            padding={{ left: 6, right: 10 }}
-            allowDataOverflow
+            tickFormatter={(d: string) => {
+              // reuse your existing formatter logic by converting d -> ms
+              return tickFormatter(parseDayToUtcMs(d) as any);
+            }}
             tickMargin={10}
             height={24}
           />
@@ -539,6 +537,8 @@ export default function EquityPreview({
           <Tooltip
             labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
             formatter={(value, name) => {
+              if (name === "pGlow") return null; // <-- hides the gray duplicate row
+
               const n = Number(value);
               const labelName =
                 name === "p" ? "Portfolio" : name === "b" ? bench1Label : name === "b2" ? bench2Label : String(name);
@@ -568,9 +568,9 @@ export default function EquityPreview({
           {/* Portfolio glow (draw a thicker, faint line under the real line) */}
           <Line
             type="monotone"
-            dataKey="p"
-            stroke="rgba(214, 168, 76, 0.25)"  // gold glow
-            strokeWidth={7}
+            dataKey="pGlow"
+            stroke="rgba(212, 175, 55, 0.35)"   // gold glow layer
+            strokeWidth={8}
             dot={false}
             isAnimationActive={false}
             connectNulls
