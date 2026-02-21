@@ -55,91 +55,54 @@ export default function Hero({
             </div>
           ) : null}
         </div>
-
-        {/* Orb */}
-        <div className={styles.orbWrap} aria-hidden="true">
-          <svg className={styles.orbSvg} viewBox="0 0 600 600" role="presentation">
-            <defs>
-              <radialGradient id="orbFill" cx="62%" cy="46%" r="60%">
-                <stop offset="0%" stopColor="rgba(255,215,120,0.45)" />
-                <stop offset="55%" stopColor="rgba(255,215,120,0.18)" />
-                <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-              </radialGradient>
-
-              <radialGradient id="orbShade" cx="38%" cy="36%" r="70%">
-                <stop offset="0%" stopColor="rgba(255,255,255,0.10)" />
-                <stop offset="65%" stopColor="rgba(0,0,0,0.10)" />
-                <stop offset="100%" stopColor="rgba(0,0,0,0.24)" />
-              </radialGradient>
-
-              <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="2.2" result="blur" />
-                <feColorMatrix
-                  in="blur"
-                  type="matrix"
-                  values="
-                    1 0 0 0 0
-                    0 1 0 0 0
-                    0 0 1 0 0
-                    0 0 0 0.55 0"
-                  result="glow"
+        <div className={styles.chartWrap} aria-hidden="true">
+          <svg
+            className={styles.chartSvg}
+            viewBox="0 0 800 500"
+            preserveAspectRatio="none"
+          >
+            {/* Grid */}
+            <g className={styles.grid}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <line
+                  key={`h-${i}`}
+                  x1="0"
+                  y1={i * 70}
+                  x2="800"
+                  y2={i * 70}
                 />
-                <feMerge>
-                  <feMergeNode in="glow" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-
-              {/* Reusable node */}
-              <circle id="node" cx="300" cy="86" r="6.2" />
-              <circle id="nodeInner" cx="300" cy="150" r="5.2" />
-            </defs>
-
-            {/* Core sphere */}
-            <circle cx="300" cy="300" r="245" fill="url(#orbShade)" opacity="0.95" />
-            <circle cx="300" cy="300" r="245" fill="url(#orbFill)" opacity="0.9" />
-
-            {/* Latitude rings */}
-            <g className={styles.orbLines} filter="url(#softGlow)">
-              <circle cx="300" cy="300" r="220" fill="none" />
-              <circle cx="300" cy="300" r="190" fill="none" />
-              <circle cx="300" cy="300" r="160" fill="none" />
-              <circle cx="300" cy="300" r="130" fill="none" />
-              <circle cx="300" cy="300" r="100" fill="none" />
-
-              {/* Meridians (ellipses rotated) */}
-              <g>
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" />
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(30 300 300)" />
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(60 300 300)" />
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(90 300 300)" />
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(120 300 300)" />
-                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(150 300 300)" />
-              </g>
-
-              {/* Tilted great circles for “web” feel */}
-              <g opacity="0.9">
-                <ellipse cx="300" cy="300" rx="220" ry="150" fill="none" transform="rotate(22 300 300)" />
-                <ellipse cx="300" cy="300" rx="220" ry="150" fill="none" transform="rotate(-22 300 300)" />
-              </g>
-            </g>
-
-            {/* Nodes: outer ring */}
-            <g className={styles.orbNodes} filter="url(#softGlow)">
-              {Array.from({ length: 24 }).map((_, i) => (
-                <use key={`n-${i}`} href="#node" transform={`rotate(${i * 15} 300 300)`} />
               ))}
-              {/* Nodes: inner ring */}
               {Array.from({ length: 12 }).map((_, i) => (
-                <use key={`ni-${i}`} href="#nodeInner" transform={`rotate(${i * 30} 300 300)`} />
+                <line
+                  key={`v-${i}`}
+                  x1={i * 70}
+                  y1="0"
+                  x2={i * 70}
+                  y2="500"
+                />
               ))}
             </g>
 
-            {/* Rim */}
-            <circle cx="300" cy="300" r="245" className={styles.orbRim} />
-          </svg>
+            {/* Equity Curve */}
+            <path
+              className={styles.equityLine}
+              d="
+                M 0 420
+                C 120 410, 180 390, 240 370
+                S 380 320, 450 300
+                S 560 240, 650 220
+                S 740 160, 800 120
+              "
+            />
 
-          <div className={styles.orbGlass} />
+            {/* Glow Point */}
+            <circle
+              className={styles.currentPoint}
+              cx="800"
+              cy="120"
+              r="6"
+            />
+          </svg>
         </div>
       </div>
     </section>
