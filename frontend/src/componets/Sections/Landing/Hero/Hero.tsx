@@ -1,3 +1,4 @@
+// src/componets/Sections/Landing/Hero/Hero.tsx
 "use client";
 
 import Image from "next/image";
@@ -20,7 +21,9 @@ export default function Hero({
 }: HeroProps) {
   return (
     <section className={styles.hero} aria-label="Hero">
+      {/* Background layer (we're not using the image right now, but leaving it supported) */}
       <div className={styles.bg} aria-hidden="true">
+        {/* If you want to re-enable image later, switch bgImg back on in CSS */}
         <Image
           src={bgSrc}
           alt={bgAlt}
@@ -32,71 +35,7 @@ export default function Hero({
       </div>
 
       <div className={styles.overlay} aria-hidden="true" />
-      {/* Decorative orb */}
-      <div className={styles.orbWrap} aria-hidden="true">
-        <svg
-          className={styles.orb}
-          viewBox="0 0 600 600"
-          role="presentation"
-          focusable="false"
-        >
-          <defs>
-            <radialGradient id="gv9Glow" cx="35%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="rgba(255,215,120,0.55)" />
-              <stop offset="55%" stopColor="rgba(255,215,120,0.18)" />
-              <stop offset="100%" stopColor="rgba(255,215,120,0.00)" />
-            </radialGradient>
 
-            <linearGradient id="gv9Stroke" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="rgba(255,215,120,0.92)" />
-              <stop offset="55%" stopColor="rgba(255,215,120,0.38)" />
-              <stop offset="100%" stopColor="rgba(255,215,120,0.14)" />
-            </linearGradient>
-          </defs>
-
-          {/* soft glow */}
-          <circle cx="300" cy="300" r="220" fill="url(#gv9Glow)" />
-
-          {/* rings */}
-          <g className={styles.orbRings} fill="none" stroke="url(#gv9Stroke)">
-            <circle cx="300" cy="300" r="210" strokeWidth="2" opacity="0.55" />
-            <ellipse cx="300" cy="300" rx="220" ry="120" strokeWidth="2" opacity="0.40" />
-            <ellipse cx="300" cy="300" rx="220" ry="120" strokeWidth="2" opacity="0.22" transform="rotate(60 300 300)" />
-            <ellipse cx="300" cy="300" rx="220" ry="120" strokeWidth="2" opacity="0.22" transform="rotate(120 300 300)" />
-          </g>
-
-          {/* clean network (more geometric, less messy) */}
-          <g className={styles.orbNet} fill="none" stroke="rgba(255,215,120,0.22)" strokeWidth="1.25">
-            {/* latitude-like arcs */}
-            <path d="M100 300 C180 210, 420 210, 500 300" />
-            <path d="M100 300 C180 390, 420 390, 500 300" />
-
-            {/* diagonal arcs */}
-            <path d="M150 190 C260 260, 340 260, 450 190" />
-            <path d="M150 410 C260 340, 340 340, 450 410" />
-
-            {/* a few clean connections */}
-            <path d="M200 170 L300 240 L400 170" />
-            <path d="M170 300 L300 300 L430 300" />
-            <path d="M200 430 L300 360 L400 430" />
-          </g>
-
-          {/* nodes (fewer + intentional) */}
-          <g className={styles.orbNodes} fill="rgba(255,215,120,0.92)">
-            <circle cx="150" cy="190" r="5" />
-            <circle cx="300" cy="160" r="5" />
-            <circle cx="450" cy="190" r="5" />
-
-            <circle cx="170" cy="300" r="5" />
-            <circle cx="300" cy="300" r="6" />
-            <circle cx="430" cy="300" r="5" />
-
-            <circle cx="200" cy="430" r="5" />
-            <circle cx="300" cy="450" r="5" />
-            <circle cx="400" cy="430" r="5" />
-          </g>
-        </svg>
-      </div>
       <div className={styles.inner}>
         <div className={styles.content}>
           <h1 className={styles.title}>
@@ -115,6 +54,92 @@ export default function Hero({
               <span>Last snapshot: {asOf}</span>
             </div>
           ) : null}
+        </div>
+
+        {/* Orb */}
+        <div className={styles.orbWrap} aria-hidden="true">
+          <svg className={styles.orbSvg} viewBox="0 0 600 600" role="presentation">
+            <defs>
+              <radialGradient id="orbFill" cx="62%" cy="46%" r="60%">
+                <stop offset="0%" stopColor="rgba(255,215,120,0.45)" />
+                <stop offset="55%" stopColor="rgba(255,215,120,0.18)" />
+                <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+              </radialGradient>
+
+              <radialGradient id="orbShade" cx="38%" cy="36%" r="70%">
+                <stop offset="0%" stopColor="rgba(255,255,255,0.10)" />
+                <stop offset="65%" stopColor="rgba(0,0,0,0.10)" />
+                <stop offset="100%" stopColor="rgba(0,0,0,0.24)" />
+              </radialGradient>
+
+              <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="2.2" result="blur" />
+                <feColorMatrix
+                  in="blur"
+                  type="matrix"
+                  values="
+                    1 0 0 0 0
+                    0 1 0 0 0
+                    0 0 1 0 0
+                    0 0 0 0.55 0"
+                  result="glow"
+                />
+                <feMerge>
+                  <feMergeNode in="glow" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              {/* Reusable node */}
+              <circle id="node" cx="300" cy="86" r="6.2" />
+              <circle id="nodeInner" cx="300" cy="150" r="5.2" />
+            </defs>
+
+            {/* Core sphere */}
+            <circle cx="300" cy="300" r="245" fill="url(#orbShade)" opacity="0.95" />
+            <circle cx="300" cy="300" r="245" fill="url(#orbFill)" opacity="0.9" />
+
+            {/* Latitude rings */}
+            <g className={styles.orbLines} filter="url(#softGlow)">
+              <circle cx="300" cy="300" r="220" fill="none" />
+              <circle cx="300" cy="300" r="190" fill="none" />
+              <circle cx="300" cy="300" r="160" fill="none" />
+              <circle cx="300" cy="300" r="130" fill="none" />
+              <circle cx="300" cy="300" r="100" fill="none" />
+
+              {/* Meridians (ellipses rotated) */}
+              <g>
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" />
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(30 300 300)" />
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(60 300 300)" />
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(90 300 300)" />
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(120 300 300)" />
+                <ellipse cx="300" cy="300" rx="220" ry="120" fill="none" transform="rotate(150 300 300)" />
+              </g>
+
+              {/* Tilted great circles for “web” feel */}
+              <g opacity="0.9">
+                <ellipse cx="300" cy="300" rx="220" ry="150" fill="none" transform="rotate(22 300 300)" />
+                <ellipse cx="300" cy="300" rx="220" ry="150" fill="none" transform="rotate(-22 300 300)" />
+              </g>
+            </g>
+
+            {/* Nodes: outer ring */}
+            <g className={styles.orbNodes} filter="url(#softGlow)">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <use key={`n-${i}`} href="#node" transform={`rotate(${i * 15} 300 300)`} />
+              ))}
+              {/* Nodes: inner ring */}
+              {Array.from({ length: 12 }).map((_, i) => (
+                <use key={`ni-${i}`} href="#nodeInner" transform={`rotate(${i * 30} 300 300)`} />
+              ))}
+            </g>
+
+            {/* Rim */}
+            <circle cx="300" cy="300" r="245" className={styles.orbRim} />
+          </svg>
+
+          <div className={styles.orbGlass} />
         </div>
       </div>
     </section>
