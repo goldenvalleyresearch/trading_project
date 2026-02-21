@@ -120,7 +120,10 @@ export default function Header({
               className={styles.logo}
             />
           </span>
-          <span className={styles.wordmark}>{brand}</span>
+          <span className={styles.wordmark}>
+            <span className={styles.wordmarkTop}>GV9</span>
+            <span className={styles.wordmarkSub}>{brand}</span>
+          </span>
         </a>
 
         <nav className={styles.nav} aria-label="Primary">
