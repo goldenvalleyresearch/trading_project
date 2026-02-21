@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { ResponsiveContainer, LineChart, Line, XAxis, Tooltip, CartesianGrid, YAxis, Area } from "recharts";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  Tooltip,
+  CartesianGrid,
+  YAxis,
+  Area,
+} from "recharts";
 import { apiGet } from "@/lib/api";
 
 type RangeKey = "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
@@ -26,6 +35,12 @@ type Props = {
   mode?: Mode;
   benchmarkMode?: Mode; // ex: "voo_index"
   secondaryBenchmarkMode?: Mode; // ex: "qqq_index"
+
+  /**
+   * Clamp chart to portfolio inception date (YYYY-MM-DD).
+   * This prevents ALL from showing dates before your true start.
+   */
+  inceptionDate?: string;
 };
 
 type Point = { d: string; v: number };
@@ -43,19 +58,6 @@ function isWeekendISO(d: string) {
   const ms = parseDayToUtcMs(d);
   const day = new Date(ms).getUTCDay(); // 0=Sun,6=Sat
   return day === 0 || day === 6;
-}
-
-function fmtDayLabel(d: string, range: RangeKey) {
-  const ms = parseDayToUtcMs(d);
-  const dt = new Date(ms);
-  if (!Number.isFinite(dt.getTime())) return "";
-
-  if (range === "5D") {
-    return dt.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short" });
-  }
-
-  // 1M/3M/6M/1Y/ALL -> Month Day
-  return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
 }
 
 function daysBetweenISO(a: string, b: string): number {
@@ -169,7 +171,6 @@ function rebaseTo100(rows: ChartRow[]) {
   }));
 }
 
-// If user picked 1Y/ALL but data span is still short, format ticks like 6M
 function tickStyleRange(requested: RangeKey, rows: ChartRowT[]): RangeKey {
   if (rows.length < 2) return requested;
 
@@ -182,8 +183,32 @@ function tickStyleRange(requested: RangeKey, rows: ChartRowT[]): RangeKey {
   return requested;
 }
 
-function tooltipLabelFromIso(d: string) {
-  const ms = parseDayToUtcMs(d);
+function makeTickFormatter(range: RangeKey) {
+  if (range === "1Y" || range === "ALL") {
+    let last = "";
+    return (ms: number) => {
+      const dt = new Date(ms);
+      if (!Number.isFinite(dt.getTime())) return "";
+      const lbl = dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", year: "numeric" });
+      if (lbl === last) return "";
+      last = lbl;
+      return lbl;
+    };
+  }
+
+  return (ms: number) => {
+    const dt = new Date(ms);
+    if (!Number.isFinite(dt.getTime())) return "";
+
+    if (range === "5D") {
+      return dt.toLocaleDateString(undefined, { timeZone: TZ, weekday: "short", month: "short", day: "2-digit" });
+    }
+
+    return dt.toLocaleDateString(undefined, { timeZone: TZ, month: "short", day: "2-digit" });
+  };
+}
+
+function tooltipLabelFromMs(ms: number) {
   const dt = new Date(ms);
   if (!Number.isFinite(dt.getTime())) return "—";
   return dt.toLocaleDateString(undefined, { timeZone: TZ, year: "numeric", month: "short", day: "2-digit" });
@@ -198,7 +223,6 @@ function intervalFor(range: RangeKey, len: number) {
   if (len <= 2) return 0;
   if (range === "5D") return 0;
 
-  // goal: ~10–16 ticks depending on range
   const target = range === "1M" ? 10 : range === "3M" ? 10 : range === "6M" ? 7 : range === "1Y" ? 12 : 16;
   return Math.max(0, Math.ceil(len / target) - 1);
 }
@@ -207,6 +231,12 @@ function symbolFromMode(mode: Mode | undefined, fallback: string) {
   if (mode === "voo_index") return "VOO";
   if (mode === "qqq_index") return "QQQ";
   return fallback;
+}
+
+function clampToInception(rows: ChartRowT[], inceptionDate?: string) {
+  const inc = (inceptionDate ?? "").slice(0, 10);
+  if (inc.length !== 10) return rows;
+  return rows.filter((r) => r.d >= inc);
 }
 
 export default function EquityPreview({
@@ -221,8 +251,9 @@ export default function EquityPreview({
   mode = "twr",
   benchmarkMode,
   secondaryBenchmarkMode,
+  inceptionDate,
 }: Props) {
-  const [rangeState, setRangeState] = useState<RangeKey>("3M");
+  const [rangeState, setRangeState] = useState<RangeKey>("1Y");
   const range = rangeProp ?? rangeState;
 
   const setRange = (r: RangeKey) => {
@@ -242,7 +273,6 @@ export default function EquityPreview({
   const [err, setErr] = useState<string | null>(null);
 
   const [hover, setHover] = useState<ChartRowT | null>(null);
-
   const lastSentRef = useRef<string>("");
 
   // ---- portfolio series ----
@@ -254,7 +284,6 @@ export default function EquityPreview({
       try {
         setLoading(true);
         setErr(null);
-
         const windowN = fetchWindow(range);
 
         const json = await apiGet<unknown>(
@@ -276,7 +305,6 @@ export default function EquityPreview({
 
     tick();
     const t = window.setInterval(tick, pollMs);
-
     return () => {
       alive = false;
       window.clearInterval(t);
@@ -318,7 +346,6 @@ export default function EquityPreview({
 
     tick();
     const t = window.setInterval(tick, pollMs);
-
     return () => {
       alive = false;
       window.clearInterval(t);
@@ -360,14 +387,18 @@ export default function EquityPreview({
 
     tick();
     const t = window.setInterval(tick, pollMs);
-
     return () => {
       alive = false;
       window.clearInterval(t);
     };
   }, [range, secondaryBenchmarkMode]);
 
-  const eqPoints = useMemo(() => uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote))), [equityRemote]);
+  const eqPoints = useMemo(() => {
+    const pts = uniqByDayKeepLast(sortByDate(normalizeEquity(equityRemote)));
+    const inc = (inceptionDate ?? "").slice(0, 10);
+    if (inc.length !== 10) return pts;
+    return pts.filter((p) => p.d >= inc);
+  }, [equityRemote, inceptionDate]);
 
   const chartData = useMemo<ChartRowT[]>(() => {
     const eq = eqPoints;
@@ -393,11 +424,27 @@ export default function EquityPreview({
 
     const rebased = rebaseFlag && hasAnyOverlap ? rebaseTo100(sliced) : sliced;
 
-    return rebased
-      .filter((r) => r.d.length === 10 && !isWeekendISO(r.d))
+    const rows = rebased
+      .filter((r) => r.d.length === 10)
+      .filter((r) => !isWeekendISO(r.d))
       .map((r) => ({ d: r.d, t: parseDayToUtcMs(r.d), p: r.p, b: r.b, b2: r.b2 }))
-      .sort((a, b) => (a.d < b.d ? -1 : 1));
-  }, [eqPoints, benchRemote, bench2Remote, range, rebaseFlag, showSpy, benchErr, bench2Err, secondaryBenchmarkMode]);
+      .filter((r) => Number.isFinite(r.t))
+      .sort((a, b) => a.t - b.t);
+
+    // Clamp to inception date so "ALL" doesn't show earlier history than your portfolio.
+    return clampToInception(rows, inceptionDate);
+  }, [
+    eqPoints,
+    benchRemote,
+    bench2Remote,
+    range,
+    rebaseFlag,
+    showSpy,
+    benchErr,
+    bench2Err,
+    secondaryBenchmarkMode,
+    inceptionDate,
+  ]);
 
   // send portfolio points back to parent
   useEffect(() => {
@@ -412,17 +459,18 @@ export default function EquityPreview({
     onData(eqPoints);
   }, [eqPoints, onData]);
 
-  // ticks (category axis)
+  // ticks
   const tickStyle = useMemo(() => tickStyleRange(range, chartData), [range, chartData]);
+  const tickFormatter = useMemo(() => makeTickFormatter(tickStyle), [tickStyle]);
   const xInterval = useMemo(() => intervalFor(tickStyle, chartData.length), [tickStyle, chartData.length]);
+
+  const tooltipFmt = rebaseFlag ? fmtPctFrom100 : fmtUSD;
 
   const bench1Label = useMemo(() => symbolFromMode(benchmarkMode, (spySymbol || "SPY").trim().toUpperCase()), [
     benchmarkMode,
     spySymbol,
   ]);
   const bench2Label = useMemo(() => symbolFromMode(secondaryBenchmarkMode, "QQQ"), [secondaryBenchmarkMode]);
-
-  const tooltipFmt = rebaseFlag ? fmtPctFrom100 : fmtUSD;
 
   if (loading && chartData.length === 0) {
     return <div style={{ height, display: "grid", placeItems: "center", opacity: 0.7 }}>Loading…</div>;
@@ -438,12 +486,11 @@ export default function EquityPreview({
     <div>
       {showControls && (
         <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-          {(["5D", "1M", "3M", "ALL"] as RangeKey[]).map((r) => (
+          {(["5D", "1M", "3M", "6M", "1Y", "ALL"] as RangeKey[]).map((r) => (
             <button key={r} type="button" onClick={() => setRange(r)} style={btn(range === r)}>
               {r}
             </button>
           ))}
-
           {showSpy && (
             <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>
               {benchErr ? `Benchmark: ${bench1Label} (off)` : `Benchmark: ${bench1Label}`}
@@ -471,25 +518,43 @@ export default function EquityPreview({
 
           <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.06)" />
           <YAxis hide domain={["auto", "auto"]} />
-
-          {/* Category axis removes weekend whitespace */}
           <XAxis
-            dataKey="d"
-            type="category"
+            type="number"
+            scale="time"
+            dataKey="t"
             axisLine={false}
             tickLine={false}
             interval={xInterval as any}
             minTickGap={12}
             tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }}
-            tickFormatter={(d: any) => fmtDayLabel(String(d), tickStyle)}
+            tickFormatter={tickFormatter as any}
+            domain={["dataMin", "dataMax"]}
+            padding={{ left: 6, right: 10 }}
+            allowDataOverflow
             tickMargin={10}
             height={24}
           />
 
-          {/* Hide the floating tooltip box, keep cursor + hover index */}
-          <Tooltip content={() => null} cursor={{ stroke: "rgba(255,255,255,0.10)" }} />
+          {/* REAL tooltip (your previous content={() => null} suppressed it) */}
+          <Tooltip
+            labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
+            formatter={(value, name) => {
+              const n = Number(value);
+              const labelName =
+                name === "p" ? "Portfolio" : name === "b" ? bench1Label : name === "b2" ? bench2Label : String(name);
+              return [tooltipFmt(n), labelName];
+            }}
+            contentStyle={{
+              background: "rgba(10,12,18,0.92)",
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: 12,
+              color: "rgba(255,255,255,0.9)",
+            }}
+            labelStyle={{ color: "rgba(255,255,255,0.65)" }}
+            cursor={{ stroke: "rgba(255,255,255,0.10)" }}
+          />
 
-          {/* Subtle portfolio area fill */}
+          {/* Under-fill for Portfolio */}
           <Area
             type="monotone"
             dataKey="p"
@@ -503,14 +568,13 @@ export default function EquityPreview({
           <Line
             type="monotone"
             dataKey="p"
-            stroke="rgba(110,160,255,0.90)"
-            strokeWidth={2.75}
+            stroke="rgba(110,160,255,0.9)"
+            strokeWidth={2.5}
             dot={false}
             isAnimationActive={false}
             connectNulls
           />
 
-          {/* Benchmark 1 (muted, dashed) */}
           {showSpy && !benchErr && (
             <Line
               type="monotone"
@@ -524,7 +588,6 @@ export default function EquityPreview({
             />
           )}
 
-          {/* Benchmark 2 (muted, dashed) */}
           {secondaryBenchmarkMode && !bench2Err && (
             <Line
               type="monotone"
@@ -540,7 +603,6 @@ export default function EquityPreview({
         </LineChart>
       </ResponsiveContainer>
 
-      {/* Docked inspector below chart (instead of blocking tooltip) */}
       <InspectorRow
         row={hover}
         rebaseTo100={rebaseFlag}
@@ -548,7 +610,6 @@ export default function EquityPreview({
         bench2Label={bench2Label}
         showBench1={showSpy && !benchErr}
         showBench2={Boolean(secondaryBenchmarkMode && !bench2Err)}
-        tooltipFmt={tooltipFmt}
       />
     </div>
   );
@@ -574,7 +635,6 @@ function InspectorRow({
   bench2Label,
   showBench1,
   showBench2,
-  tooltipFmt,
 }: {
   row: ChartRowT | null;
   rebaseTo100: boolean;
@@ -582,11 +642,11 @@ function InspectorRow({
   bench2Label: string;
   showBench1: boolean;
   showBench2: boolean;
-  tooltipFmt: (n: number) => string;
 }) {
   if (!row) return null;
 
-  const label = tooltipLabelFromIso(row.d);
+  const label = tooltipLabelFromMs(parseDayToUtcMs(row.d));
+  const fmt = rebaseTo100 ? fmtPctFrom100 : fmtUSD;
 
   return (
     <div
@@ -604,26 +664,30 @@ function InspectorRow({
     >
       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>{label}</div>
 
-      <KV label="Portfolio" value={row.p == null ? "—" : tooltipFmt(Number(row.p))} />
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.86)" }}>Portfolio:</span>
+        <span style={{ fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+          {row.p == null ? "—" : fmt(Number(row.p))}
+        </span>
+      </div>
 
-      {showBench1 && <KV label={bench1Label} value={row.b == null ? "—" : tooltipFmt(Number(row.b))} subtle />}
-
-      {showBench2 && <KV label={bench2Label} value={row.b2 == null ? "—" : tooltipFmt(Number(row.b2))} subtle />}
-
-      {rebaseTo100 && (
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", marginLeft: "auto" }}>Rebased to 100</div>
+      {showBench1 && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", opacity: 0.85 }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>{bench1Label}:</span>
+          <span style={{ fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+            {row.b == null ? "—" : fmt(Number(row.b))}
+          </span>
+        </div>
       )}
-    </div>
-  );
-}
 
-function KV({ label, value, subtle }: { label: string; value: string; subtle?: boolean }) {
-  return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", opacity: subtle ? 0.85 : 1 }}>
-      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.80)" }}>{label}:</span>
-      <span style={{ fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-        {value}
-      </span>
+      {showBench2 && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", opacity: 0.85 }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.70)" }}>{bench2Label}:</span>
+          <span style={{ fontSize: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+            {row.b2 == null ? "—" : fmt(Number(row.b2))}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

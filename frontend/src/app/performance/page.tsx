@@ -2,7 +2,6 @@
 
 import styles from "./page.module.css";
 import Header from "@/componets/UI/Header_bar/Header_bar";
-import FeatureCard from "@/componets/UI/FeatureCard/FeatureCard";
 import Footer from "@/componets/UI/Footer/Footer";
 
 import PerformanceHero from "@/componets/Sections/Performance/PerformanceHero/PerformanceHero";
@@ -17,6 +16,7 @@ export default function PerformancePage() {
 
       <main className={styles.main}>
         <PerformanceHero />
+
         <div className={styles.disclosureBanner}>
           <strong>Disclosure:</strong> Performance shown reflects a personal
           account and is provided for transparency and educational purposes only.
@@ -26,27 +26,6 @@ export default function PerformancePage() {
         </div>
 
         <PerformanceChartCard />
-
-        <section className={styles.grid}>
-          <FeatureCard
-            title="Portfolio"
-            body="Holdings, weights, and cash with clean tables that load fast."
-            href="/portfolio"
-            linkLabel="Open portfolio"
-          />
-          <FeatureCard
-            title="Newsletter"
-            body="Weekly digest + trade notes, written for audit and clarity."
-            href="/newsletter"
-            linkLabel="Read newsletter"
-          />
-          <FeatureCard
-            title="Transparency"
-            body="Receipts-style timeline for snapshots, updates, and decisions."
-            href="/transparency"
-            linkLabel="View timeline"
-          />
-        </section>
       </main>
 
       <Footer />
