@@ -2,8 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  backdrop-filter: blur(10px);
-  background: rgba(7, 10, 16, 0.78);
+  background: rgba(7, 10, 16, 0.98);
   border-bottom: 1px solid rgba(255, 255, 255, 0.10);
 }
 
@@ -29,26 +28,19 @@
 }
 
 .logoWrap {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
   position: relative;
   overflow: visible;
 }
 
 .logo {
   object-fit: contain;
-  transform: scale(1.25);
-  filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.50));
+  transform: none;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
 }
 
-.wordmark {
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: -0.015em;
-  white-space: nowrap;
-  color: rgba(255, 255, 255, 0.95);
-}
 .wordmark {
   display: flex;
   flex-direction: column;
@@ -57,11 +49,19 @@
 }
 
 .wordmarkTop {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.96);
+}
+
+.wordmarkSub {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.58);
 }
 
 .wordmarkSub {
