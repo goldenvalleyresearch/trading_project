@@ -178,7 +178,7 @@ export default function PerformanceChartCard() {
     };
 
     const rAll = {
-      label: "Since inception",
+      label: "Since inception (09-18-2025)",
       portfolio: pctReturn(port),
       voo: pctReturn(voo),
       qqq: pctReturn(qqq),

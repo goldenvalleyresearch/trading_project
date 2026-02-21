@@ -562,14 +562,26 @@ export default function EquityPreview({
             stroke="none"
             isAnimationActive={false}
             connectNulls
+            tooltipType="none"
           />
 
-          {/* Portfolio line */}
+          {/* Portfolio glow (draw a thicker, faint line under the real line) */}
           <Line
             type="monotone"
             dataKey="p"
-            stroke="rgba(110,160,255,0.9)"
-            strokeWidth={2.5}
+            stroke="rgba(214, 168, 76, 0.25)"  // gold glow
+            strokeWidth={7}
+            dot={false}
+            isAnimationActive={false}
+            connectNulls
+          />
+
+          {/* Portfolio main line */}
+          <Line
+            type="monotone"
+            dataKey="p"
+            stroke="rgba(214, 168, 76, 0.95)" // gold
+            strokeWidth={2.75}
             dot={false}
             isAnimationActive={false}
             connectNulls
@@ -579,9 +591,8 @@ export default function EquityPreview({
             <Line
               type="monotone"
               dataKey="b"
-              stroke="rgba(255,255,255,0.30)"
-              strokeWidth={1.75}
-              strokeDasharray="6 6"
+              stroke="rgba(165, 95, 255, 0.9)" // purple for VOO
+              strokeWidth={2}
               dot={false}
               isAnimationActive={false}
               connectNulls
@@ -592,9 +603,8 @@ export default function EquityPreview({
             <Line
               type="monotone"
               dataKey="b2"
-              stroke="rgba(120,220,170,0.45)"
-              strokeWidth={1.75}
-              strokeDasharray="6 6"
+              stroke="rgba(90, 150, 255, 0.9)" // blue for QQQ
+              strokeWidth={2}
               dot={false}
               isAnimationActive={false}
               connectNulls
