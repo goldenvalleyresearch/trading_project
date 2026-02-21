@@ -122,10 +122,15 @@
 }
 
 @keyframes candleIn {
-  /* For each candle: appear quickly, then stay visible until loop restarts */
-  0%   { opacity: 0; transform: translateY(10px) scaleY(0.92); filter: blur(0.4px); }
-  6%   { opacity: 1; transform: translateY(0px) scaleY(1);    filter: blur(0px); }
-  100% { opacity: 1; transform: translateY(0px) scaleY(1);    filter: blur(0px); }
+  /* appear */
+  0%   { opacity: 0; transform: translateY(12px) scaleY(0.90); filter: blur(0.6px); }
+  8%   { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
+
+  /* stay visible most of the loop */
+  78%  { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
+
+  /* clear before loop restarts */
+  100% { opacity: 0; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
 }
 
 .wick {
@@ -141,8 +146,8 @@
 }
 
 .bodyDown {
-  fill: rgba(255, 215, 120, 0.30);
-  stroke: rgba(255, 215, 120, 0.16);
+  fill: rgba(255, 215, 120, 0.18);
+  stroke: rgba(255, 215, 120, 0.14);
   stroke-width: 1;
 }
 

@@ -23,26 +23,26 @@ export default function Hero({
   // “Random-ish” but curated: volatile, generally trending up.
   // Values are in an arbitrary price scale (we map to SVG coords).
   const candles: Candle[] = [
-    { o: 100, h: 103, l: 98, c: 101 },
-    { o: 101, h: 104, l: 100, c: 103 },
-    { o: 103, h: 105, l: 101, c: 102 },
-    { o: 102, h: 106, l: 101, c: 105 },
-    { o: 105, h: 107, l: 103, c: 104 },
-    { o: 104, h: 108, l: 103, c: 107 },
-    { o: 107, h: 110, l: 106, c: 108 },
-    { o: 108, h: 111, l: 107, c: 109 },
-    { o: 109, h: 112, l: 108, c: 111 },
-    { o: 111, h: 114, l: 110, c: 112 },
-    { o: 112, h: 115, l: 111, c: 113 },
-    { o: 113, h: 116, l: 112, c: 115 },
-    { o: 115, h: 118, l: 114, c: 117 },
-    { o: 117, h: 119, l: 115, c: 116 },
-    { o: 116, h: 120, l: 115, c: 119 },
-    { o: 119, h: 122, l: 118, c: 121 },
-    { o: 121, h: 123, l: 119, c: 120 },
-    { o: 120, h: 124, l: 119, c: 123 },
-    { o: 123, h: 126, l: 122, c: 125 },
-    { o: 125, h: 128, l: 124, c: 127 },
+    { o: 100, h: 103, l: 98,  c: 102 }, // strong up (bigger body)
+    { o: 102, h: 104, l: 101, c: 101 }, // pullback (small red)
+    { o: 101, h: 106, l: 100, c: 105 }, // big up
+    { o: 105, h: 106, l: 102, c: 103 }, // pullback (bigger red)
+    { o: 103, h: 107, l: 102, c: 106 }, // up
+    { o: 106, h: 109, l: 104, c: 105 }, // long wick / chop
+    { o: 105, h: 110, l: 104, c: 109 }, // strong up
+    { o: 109, h: 111, l: 107, c: 108 }, // small pullback
+    { o: 108, h: 114, l: 107, c: 112 }, // strong up
+    { o: 112, h: 113, l: 109, c: 110 }, // bigger pullback
+    { o: 110, h: 115, l: 109, c: 114 }, // strong up
+    { o: 114, h: 116, l: 112, c: 113 }, // tiny red
+    { o: 113, h: 118, l: 112, c: 117 }, // big up
+    { o: 117, h: 119, l: 114, c: 115 }, // pullback w/ wick
+    { o: 115, h: 121, l: 114, c: 120 }, // big up
+    { o: 120, h: 122, l: 118, c: 119 }, // small red
+    { o: 119, h: 124, l: 118, c: 123 }, // up
+    { o: 123, h: 125, l: 121, c: 122 }, // small red
+    { o: 122, h: 127, l: 121, c: 126 }, // big up
+    { o: 126, h: 130, l: 124, c: 129 }, // big up into the right edge
   ];
 
   // SVG layout
