@@ -65,31 +65,35 @@ export default function Hero({
             <ellipse cx="300" cy="300" rx="220" ry="120" strokeWidth="2" opacity="0.22" transform="rotate(120 300 300)" />
           </g>
 
-          {/* node network */}
-          <g className={styles.orbNet} stroke="rgba(255,215,120,0.28)" strokeWidth="1.4" fill="none">
-            <path d="M120 220 L210 150 L320 170 L420 140 L505 220 L450 320 L330 360 L210 330 Z" />
-            <path d="M160 360 L240 430 L360 450 L460 400 L430 280 L300 260 L210 300 Z" />
-            <path d="M210 150 L300 260 L420 140" />
-            <path d="M120 220 L300 260 L505 220" />
-            <path d="M210 330 L330 360 L450 320" />
-            <path d="M240 430 L330 360 L460 400" />
+          {/* clean network (more geometric, less messy) */}
+          <g className={styles.orbNet} fill="none" stroke="rgba(255,215,120,0.22)" strokeWidth="1.25">
+            {/* latitude-like arcs */}
+            <path d="M100 300 C180 210, 420 210, 500 300" />
+            <path d="M100 300 C180 390, 420 390, 500 300" />
+
+            {/* diagonal arcs */}
+            <path d="M150 190 C260 260, 340 260, 450 190" />
+            <path d="M150 410 C260 340, 340 340, 450 410" />
+
+            {/* a few clean connections */}
+            <path d="M200 170 L300 240 L400 170" />
+            <path d="M170 300 L300 300 L430 300" />
+            <path d="M200 430 L300 360 L400 430" />
           </g>
 
-          {/* nodes */}
+          {/* nodes (fewer + intentional) */}
           <g className={styles.orbNodes} fill="rgba(255,215,120,0.92)">
-            <circle cx="120" cy="220" r="5" />
-            <circle cx="210" cy="150" r="5" />
-            <circle cx="320" cy="170" r="5" />
-            <circle cx="420" cy="140" r="5" />
-            <circle cx="505" cy="220" r="5" />
-            <circle cx="450" cy="320" r="5" />
-            <circle cx="330" cy="360" r="5" />
-            <circle cx="210" cy="330" r="5" />
-            <circle cx="160" cy="360" r="5" />
-            <circle cx="240" cy="430" r="5" />
-            <circle cx="360" cy="450" r="5" />
-            <circle cx="460" cy="400" r="5" />
-            <circle cx="300" cy="260" r="4" opacity="0.9" />
+            <circle cx="150" cy="190" r="5" />
+            <circle cx="300" cy="160" r="5" />
+            <circle cx="450" cy="190" r="5" />
+
+            <circle cx="170" cy="300" r="5" />
+            <circle cx="300" cy="300" r="6" />
+            <circle cx="430" cy="300" r="5" />
+
+            <circle cx="200" cy="430" r="5" />
+            <circle cx="300" cy="450" r="5" />
+            <circle cx="400" cy="430" r="5" />
           </g>
         </svg>
       </div>

@@ -93,7 +93,7 @@
 /* --- Orb --- */
 .orbWrap {
   position: absolute;
-  right: -120px;
+  right: -40px;
   top: 50%;
   transform: translateY(-50%);
   width: min(760px, 58vw);
@@ -112,16 +112,17 @@
 }
 
 .orbRings {
+  opacity: 0.75;
   animation: gv9Tilt 8.5s ease-in-out infinite;
   transform-origin: 50% 50%;
 }
 
 .orbNet {
-  opacity: 0.85;
+  opacity: 0.80;
 }
 
 .orbNodes circle {
-  filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.22));
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, 0.16));
 }
 
 @keyframes gv9Spin {
