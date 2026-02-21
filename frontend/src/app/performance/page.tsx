@@ -17,6 +17,13 @@ export default function PerformancePage() {
 
       <main className={styles.main}>
         <PerformanceHero />
+        <div className={styles.disclosureBanner}>
+          <strong>Disclosure:</strong> Performance shown reflects a personal
+          account and is provided for transparency and educational purposes only.
+          Results are unaudited and may not reflect fees, taxes, spreads,
+          commissions, or slippage. This is not investment advice or an offer to
+          manage money.
+        </div>
 
         <PerformanceChartCard />
 

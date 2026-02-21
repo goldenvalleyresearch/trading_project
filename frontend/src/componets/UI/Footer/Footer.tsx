@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./Footer.module.css";
 import { LINKS } from "@/lib/site";
 
@@ -29,7 +30,16 @@ export default function Footer() {
 
       <div className={styles.bottom}>
         <span>© {new Date().getFullYear()} Golden Valley Market Research</span>
-        <span>Not investment advice</span>
+
+        <span className={styles.disclaimer}>
+          Educational purposes only — not investment advice or a solicitation.
+          Investing involves risk, including loss of principal. Past performance
+          is not indicative of future results.{" "}
+          <Link className={styles.disclosureLink} href="/disclosures">
+            See Disclosures
+          </Link>
+          .
+        </span>
       </div>
     </footer>
   );
