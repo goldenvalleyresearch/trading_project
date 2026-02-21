@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
@@ -20,29 +21,43 @@ export default function Hero({
   subtitle = "A research-driven tool designed to surface high-quality stock setups by aligning fundamental strength and technical signals in the same direction, with a disciplined focus on risk.",
   asOf,
 }: HeroProps) {
-  // “Random-ish” but curated: volatile, generally trending up.
-  // Values are in an arbitrary price scale (we map to SVG coords).
+  // Curated sequence: trending up with real runs + real pullbacks (not alternating every bar)
   const candles: Candle[] = [
-    { o: 100, h: 103, l: 98,  c: 102 }, // strong up (bigger body)
-    { o: 102, h: 104, l: 101, c: 101 }, // pullback (small red)
-    { o: 101, h: 106, l: 100, c: 105 }, // big up
-    { o: 105, h: 106, l: 102, c: 103 }, // pullback (bigger red)
-    { o: 103, h: 107, l: 102, c: 106 }, // up
-    { o: 106, h: 109, l: 104, c: 105 }, // long wick / chop
-    { o: 105, h: 110, l: 104, c: 109 }, // strong up
-    { o: 109, h: 111, l: 107, c: 108 }, // small pullback
-    { o: 108, h: 114, l: 107, c: 112 }, // strong up
-    { o: 112, h: 113, l: 109, c: 110 }, // bigger pullback
-    { o: 110, h: 115, l: 109, c: 114 }, // strong up
-    { o: 114, h: 116, l: 112, c: 113 }, // tiny red
-    { o: 113, h: 118, l: 112, c: 117 }, // big up
-    { o: 117, h: 119, l: 114, c: 115 }, // pullback w/ wick
-    { o: 115, h: 121, l: 114, c: 120 }, // big up
-    { o: 120, h: 122, l: 118, c: 119 }, // small red
-    { o: 119, h: 124, l: 118, c: 123 }, // up
-    { o: 123, h: 125, l: 121, c: 122 }, // small red
-    { o: 122, h: 127, l: 121, c: 126 }, // big up
-    { o: 126, h: 130, l: 124, c: 129 }, // big up into the right edge
+    // early push (3 greens)
+    { o: 100, h: 104, l:  99, c: 103 },
+    { o: 103, h: 106, l: 102, c: 105 },
+    { o: 105, h: 108, l: 104, c: 107 },
+
+    // sharp pullback (2 reds)
+    { o: 107, h: 108, l: 103, c: 104 },
+    { o: 104, h: 105, l: 100, c: 101 },
+
+    // bounce + chop
+    { o: 101, h: 104, l: 100, c: 103 },
+    { o: 103, h: 105, l: 101, c: 102 },
+    { o: 102, h: 106, l: 101, c: 105 },
+
+    // grind higher (3 greens)
+    { o: 105, h: 108, l: 104, c: 107 },
+    { o: 107, h: 110, l: 106, c: 109 },
+    { o: 109, h: 112, l: 108, c: 111 },
+
+    // volatility / wick
+    { o: 111, h: 114, l: 109, c: 112 },
+
+    // pullback (2 reds, but higher low than prior pullback)
+    { o: 112, h: 113, l: 109, c: 110 },
+    { o: 110, h: 111, l: 107, c: 108 },
+
+    // strong recovery + push to highs (3 greens)
+    { o: 108, h: 112, l: 107, c: 111 },
+    { o: 111, h: 115, l: 110, c: 114 },
+    { o: 114, h: 118, l: 113, c: 117 },
+
+    // brief stall + final push
+    { o: 117, h: 119, l: 115, c: 116 },
+    { o: 116, h: 121, l: 115, c: 120 },
+    { o: 120, h: 124, l: 119, c: 123 },
   ];
 
   // SVG layout
@@ -58,7 +73,6 @@ export default function Hero({
   const plotH = H - PAD_Y * 2;
 
   const y = (p: number) => {
-    // Higher price => smaller y
     const t = (p - minP) / (maxP - minP || 1);
     return PAD_Y + (1 - t) * plotH;
   };
@@ -68,10 +82,15 @@ export default function Hero({
   const bodyW = Math.max(7, Math.min(12, step * 0.55));
   const x = (i: number) => PAD_X + i * step + step * 0.5;
 
-  // Animation timing
-  const candleDelay = 0.22; // seconds between candles printing
-  const holdAfter = 0.9;    // pause at end before loop restarts
-  const total = n * candleDelay + holdAfter;
+  // Timing:
+  // - each candle prints every candleDelay seconds
+  // - holdAfter keeps the finished chart visible briefly
+  // - loop uses a built-in “hidden pause” (last ~21% of total) via CSS chartLoop keyframes
+  const candleDelay = 0.32; // slower print (feels more premium)
+  const holdAfter = 1.0;    // hold fully printed chart
+
+  const printHold = n * candleDelay + holdAfter;
+  const total = printHold / 0.79; // makes the hidden pause ~21% of total (~1–2s typically)
 
   return (
     <section className={styles.hero} aria-label="Hero">
@@ -102,7 +121,6 @@ export default function Hero({
           className={styles.candleWrap}
           style={
             {
-              // Pass duration to CSS so everything loops cleanly
               ["--loop" as any]: `${total}s`,
               ["--delayStep" as any]: `${candleDelay}s`,
             } as React.CSSProperties
@@ -115,30 +133,48 @@ export default function Hero({
             role="img"
             aria-label="Animated candlestick chart"
           >
-            {/* subtle “glass” card */}
-            <rect
-              x="0"
-              y="0"
-              width={W}
-              height={H}
-              rx="22"
-              className={styles.glass}
+            {/* glass card */}
+            <rect x="0" y="0" width={W} height={H} rx="22" className={styles.glass} />
+
+            {/* subtle top-left glass highlight */}
+            <path
+              d={`M 24 34
+                  C 110 10, 210 8, 320 22
+                  C 220 46, 140 56, 60 64
+                  C 40 62, 28 52, 24 34 Z`}
+              className={styles.glassHighlight}
             />
 
             {/* grid */}
             <g className={styles.grid}>
               {Array.from({ length: 10 }).map((_, i) => {
                 const gx = PAD_X + (plotW / 9) * i;
-                return <line key={`vx-${i}`} x1={gx} y1={PAD_Y} x2={gx} y2={H - PAD_Y} />;
+                return (
+                  <line
+                    key={`vx-${i}`}
+                    x1={gx}
+                    y1={PAD_Y}
+                    x2={gx}
+                    y2={H - PAD_Y}
+                  />
+                );
               })}
               {Array.from({ length: 6 }).map((_, i) => {
                 const gy = PAD_Y + (plotH / 5) * i;
-                return <line key={`hy-${i}`} x1={PAD_X} y1={gy} x2={W - PAD_X} y2={gy} />;
+                return (
+                  <line
+                    key={`hy-${i}`}
+                    x1={PAD_X}
+                    y1={gy}
+                    x2={W - PAD_X}
+                    y2={gy}
+                  />
+                );
               })}
             </g>
 
-            {/* candles */}
-            <g className={styles.candles}>
+            {/* IMPORTANT: group-level loop controls the “clear all at once + pause” */}
+            <g className={styles.candlesGroup}>
               {candles.map((d, i) => {
                 const cx = x(i);
                 const yO = y(d.o);
@@ -156,22 +192,10 @@ export default function Hero({
                   <g
                     key={i}
                     className={styles.candle}
-                    style={
-                      {
-                        ["--i" as any]: i,
-                        ["--x" as any]: cx,
-                        ["--yBase" as any]: H - PAD_Y, // animate from bottom-ish
-                      } as React.CSSProperties
-                    }
+                    style={{ ["--i" as any]: i } as React.CSSProperties}
                   >
                     {/* wick */}
-                    <line
-                      x1={cx}
-                      y1={yH}
-                      x2={cx}
-                      y2={yL}
-                      className={styles.wick}
-                    />
+                    <line x1={cx} y1={yH} x2={cx} y2={yL} className={styles.wick} />
 
                     {/* body */}
                     <rect
@@ -185,15 +209,15 @@ export default function Hero({
                   </g>
                 );
               })}
-            </g>
 
-            {/* a “current” marker that also loops */}
-            <circle
-              cx={x(n - 1)}
-              cy={y(candles[n - 1].c)}
-              r="4.5"
-              className={styles.currentDot}
-            />
+              {/* “current” marker lives inside the loop group so it clears too */}
+              <circle
+                cx={x(n - 1)}
+                cy={y(candles[n - 1].c)}
+                r="4.5"
+                className={styles.currentDot}
+              />
+            </g>
           </svg>
         </div>
       </div>

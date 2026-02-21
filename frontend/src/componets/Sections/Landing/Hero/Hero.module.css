@@ -1,3 +1,4 @@
+/* src/componets/Sections/Hero/Hero.module.css */
 .hero {
   position: relative;
   min-height: calc(100vh - 72px);
@@ -106,6 +107,11 @@
   stroke-width: 1;
 }
 
+/* subtle glass highlight */
+.glassHighlight {
+  fill: rgba(255, 255, 255, 0.03);
+}
+
 /* grid */
 .grid line {
   stroke: rgba(255, 255, 255, 0.06);
@@ -113,24 +119,36 @@
   shape-rendering: crispEdges;
 }
 
-/* candles: sequential print */
+/*
+  KEY IDEA:
+  - Candles individually animate ONLY their “print in”
+  - The whole group toggles visibility to clear ALL at once + pause
+*/
+
+.candlesGroup {
+  animation: chartLoop var(--loop) linear infinite;
+  transform-origin: center;
+}
+
+@keyframes chartLoop {
+  0%   { opacity: 1; }
+  78%  { opacity: 1; }  /* printing + hold */
+  79%  { opacity: 0; }  /* instant clear */
+  100% { opacity: 0; }  /* pause with empty grid */
+}
+
+/* candles: sequential print in (no individual fade-out) */
 .candle {
   opacity: 0;
-  transform-origin: center calc(var(--yBase) * 1px);
   animation: candleIn var(--loop) linear infinite;
   animation-delay: calc(var(--i) * var(--delayStep));
+  animation-fill-mode: both;
 }
 
 @keyframes candleIn {
-  /* appear */
-  0%   { opacity: 0; transform: translateY(12px) scaleY(0.90); filter: blur(0.6px); }
-  8%   { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
-
-  /* stay visible most of the loop */
-  78%  { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
-
-  /* clear before loop restarts */
-  100% { opacity: 0; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
+  0%   { opacity: 0; transform: translateY(10px) scaleY(0.92); filter: blur(0.6px); }
+  6%   { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
+  100% { opacity: 1; transform: translateY(0px)  scaleY(1);    filter: blur(0px); }
 }
 
 .wick {
@@ -189,9 +207,12 @@
 
 /* Accessibility: reduce motion */
 @media (prefers-reduced-motion: reduce) {
+  .candlesGroup,
   .candle,
   .currentDot {
     animation: none !important;
     opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
   }
 }
