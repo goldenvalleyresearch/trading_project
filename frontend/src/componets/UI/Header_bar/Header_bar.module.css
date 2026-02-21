@@ -28,23 +28,26 @@
 }
 
 .logoWrap {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
   position: relative;
   overflow: visible;
+  flex: 0 0 auto;
 }
 
 .logo {
   object-fit: contain;
   transform: none;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.55));
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
 }
 
 .wordmark {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.05;
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.96);
   white-space: nowrap;
 }
 
