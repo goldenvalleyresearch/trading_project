@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  background: #ffffff;   /* <-- change */
+  background: #05070c;   /* <-- change */
   color: #000000;        /* <-- change */
   position: relative;
   overflow-x: hidden;
@@ -42,6 +42,7 @@
   padding: 0;
   position: relative;
   z-index: 1;
+  background: transparent;
 }
 
 .container {
