@@ -432,7 +432,7 @@ export default function EquityPreview({
       .sort((a, b) => a.t - b.t);
 
     // Clamp to inception date so "ALL" doesn't show earlier history than your portfolio.
-    return clampToInception(rows, inceptionDate);
+    return range === "ALL" ? clampToInception(rows, inceptionDate) : rows;
   }, [
     eqPoints,
     benchRemote,

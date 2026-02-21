@@ -10,7 +10,7 @@ type EquityPoint = { d: string; v: number };
 // keep your page buttons
 type RangeKey = "5D" | "1M" | "3M" | "ALL";
 
-const INCEPTION_DATE = "2026-09-18";
+const INCEPTION_DATE = "2025-09-18";
 
 // desired trading-day-ish sample sizes
 const N_5D = 6;
