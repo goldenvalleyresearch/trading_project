@@ -21,10 +21,10 @@ export default function Hero({
   subtitle = "A research-driven tool designed to surface high-quality stock setups by aligning fundamental strength and technical signals in the same direction, with a disciplined focus on risk.",
   asOf,
 }: HeroProps) {
-  // Curated sequence: trending up with real runs + real pullbacks (not alternating every bar)
+  // Curated sequence: trending up with real runs + real pullbacks
   const candles: Candle[] = [
     // early push (3 greens)
-    { o: 100, h: 104, l:  99, c: 103 },
+    { o: 100, h: 104, l: 99, c: 103 },
     { o: 103, h: 106, l: 102, c: 105 },
     { o: 105, h: 108, l: 104, c: 107 },
 
@@ -83,14 +83,25 @@ export default function Hero({
   const x = (i: number) => PAD_X + i * step + step * 0.5;
 
   // Timing:
-  // - each candle prints every candleDelay seconds
-  // - holdAfter keeps the finished chart visible briefly
-  // - loop uses a built-in “hidden pause” (last ~21% of total) via CSS chartLoop keyframes
-  const candleDelay = 0.32; // slower print (feels more premium)
-  const holdAfter = 1.0;    // hold fully printed chart
+  // - candles print during first ~78% of the loop
+  // - chart clears instantly at ~79%
+  // - remainder is empty pause
+  const candleDelay = 0.32;
+  const holdAfter = 1.0;
 
   const printHold = n * candleDelay + holdAfter;
-  const total = printHold / 0.79; // makes the hidden pause ~21% of total (~1–2s typically)
+  const total = printHold / 0.79;
+
+  // ✅ This forces a hard remount each loop so candles truly restart from blank
+  const [cycle, setCycle] = React.useState(0);
+
+  React.useEffect(() => {
+    const id = window.setInterval(() => {
+      setCycle((c) => c + 1);
+    }, total * 1000);
+
+    return () => window.clearInterval(id);
+  }, [total]);
 
   return (
     <section className={styles.hero} aria-label="Hero">
@@ -149,32 +160,16 @@ export default function Hero({
             <g className={styles.grid}>
               {Array.from({ length: 10 }).map((_, i) => {
                 const gx = PAD_X + (plotW / 9) * i;
-                return (
-                  <line
-                    key={`vx-${i}`}
-                    x1={gx}
-                    y1={PAD_Y}
-                    x2={gx}
-                    y2={H - PAD_Y}
-                  />
-                );
+                return <line key={`vx-${i}`} x1={gx} y1={PAD_Y} x2={gx} y2={H - PAD_Y} />;
               })}
               {Array.from({ length: 6 }).map((_, i) => {
                 const gy = PAD_Y + (plotH / 5) * i;
-                return (
-                  <line
-                    key={`hy-${i}`}
-                    x1={PAD_X}
-                    y1={gy}
-                    x2={W - PAD_X}
-                    y2={gy}
-                  />
-                );
+                return <line key={`hy-${i}`} x1={PAD_X} y1={gy} x2={W - PAD_X} y2={gy} />;
               })}
             </g>
 
-            {/* IMPORTANT: group-level loop controls the “clear all at once + pause” */}
-            <g className={styles.candlesGroup}>
+            {/* ✅ KEY FIX: remount this whole group each loop */}
+            <g key={cycle} className={styles.candlesGroup}>
               {candles.map((d, i) => {
                 const cx = x(i);
                 const yO = y(d.o);
@@ -194,10 +189,7 @@ export default function Hero({
                     className={styles.candle}
                     style={{ ["--i" as any]: i } as React.CSSProperties}
                   >
-                    {/* wick */}
                     <line x1={cx} y1={yH} x2={cx} y2={yL} className={styles.wick} />
-
-                    {/* body */}
                     <rect
                       x={cx - bodyW / 2}
                       y={top}
@@ -210,7 +202,7 @@ export default function Hero({
                 );
               })}
 
-              {/* “current” marker lives inside the loop group so it clears too */}
+              {/* current marker restarts cleanly too */}
               <circle
                 cx={x(n - 1)}
                 cy={y(candles[n - 1].c)}

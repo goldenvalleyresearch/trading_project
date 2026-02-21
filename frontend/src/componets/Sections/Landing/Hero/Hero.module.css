@@ -90,7 +90,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  transform: translateX(-18px); /* pulls it slightly toward center */
+  transform: translateX(-18px);
 }
 
 .candleSvg {
@@ -121,26 +121,27 @@
 
 /*
   KEY IDEA:
-  - Candles individually animate ONLY their “print in”
-  - The whole group toggles visibility to clear ALL at once + pause
+  - Candles animate ONLY their “print in”
+  - The whole group clears ALL at once + pauses
 */
 
 .candlesGroup {
-  animation: chartLoop var(--loop) linear infinite;
+  animation: chartLoop var(--loop) linear;
+  animation-fill-mode: both;
   transform-origin: center;
 }
 
 @keyframes chartLoop {
   0%   { opacity: 1; }
-  78%  { opacity: 1; }  /* printing + hold */
+  78%  { opacity: 1; }
   79%  { opacity: 0; }  /* instant clear */
-  100% { opacity: 0; }  /* pause with empty grid */
+  100% { opacity: 0; }  /* empty pause */
 }
 
-/* candles: sequential print in (no individual fade-out) */
+/* candles: sequential print in */
 .candle {
   opacity: 0;
-  animation: candleIn var(--loop) linear infinite;
+  animation: candleIn var(--loop) linear;
   animation-delay: calc(var(--i) * var(--delayStep));
   animation-fill-mode: both;
 }
@@ -169,16 +170,18 @@
   stroke-width: 1;
 }
 
-/* current dot pulse (independent loop) */
+/* ✅ Make the dot restart cleanly with the loop as well */
 .currentDot {
   fill: rgba(255, 215, 120, 0.95);
   filter: drop-shadow(0 0 12px rgba(255, 215, 120, 0.35));
-  animation: dotPulse 1.8s ease-in-out infinite;
+  animation: dotPulse var(--loop) linear;
+  animation-fill-mode: both;
 }
 
 @keyframes dotPulse {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50%      { transform: scale(1.18); opacity: 1; }
+  0%, 78%  { transform: scale(1); opacity: 0.85; }
+  40%      { transform: scale(1.18); opacity: 1; }
+  79%, 100%{ transform: scale(1); opacity: 0; } /* vanish during clear/pause */
 }
 
 /* Mobile */
