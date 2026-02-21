@@ -9,22 +9,18 @@ type Props = {
 };
 
 export default function PerformanceHero({
-  title = "Performance",
-  lede = "Equity curve, drawdowns, and benchmark comparisons. Clear enough to audit.",
-  ctaHref = "/portfolio",
-  ctaLabel = "Open portfolio →",
+  title = "Performance"
+  
 }: Props) {
   return (
     <section className={styles.top}>
       <div>
         <h1 className={styles.h1}>{title}</h1>
-        <p className={styles.lede}>{lede}</p>
       </div>
 
       <div className={styles.topActions}>
-        <a className={styles.ghostBtn} href={ctaHref}>
-          {ctaLabel}
-        </a>
+        
+        
       </div>
     </section>
   );

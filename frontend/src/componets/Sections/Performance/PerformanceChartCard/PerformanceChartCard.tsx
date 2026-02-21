@@ -1,38 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import styles from "./PerformanceChartCard.module.css";
 import EquityPreview from "@/componets/UI/EquityPreview/EquityPreview";
 
 type EquityPoint = { d: string; v: number };
-type RangeKey = "5D" | "1M" | "3M" | "6M" | "1Y" | "ALL";
-
-function pctPtsStr(x: number | null | undefined): string {
-  if (typeof x !== "number" || !Number.isFinite(x)) return "—";
-  return `${x.toFixed(2)}%`;
-}
-
-function perfFromLookback(points: EquityPoint[], lookbackPoints: number): number | null {
-  if (points.length < lookbackPoints + 1) return null;
-
-  const end = Number(points[points.length - 1].v);
-  const base = Number(points[points.length - 1 - lookbackPoints].v);
-
-  if (!Number.isFinite(end) || !Number.isFinite(base) || base <= 0) return null;
-  return (end / base - 1) * 100;
-}
-
-function perfSinceInception(points: EquityPoint[]): number | null {
-  if (points.length < 2) return null;
-  const end = Number(points[points.length - 1].v);
-  const base = Number(points[0].v);
-  if (!Number.isFinite(end) || !Number.isFinite(base) || base <= 0) return null;
-  return (end / base - 1) * 100;
-}
+type RangeKey = "5D" | "1M" | "3M" | "ALL";
 
 export default function PerformanceChartCard() {
-  const [range, setRange] = useState<RangeKey>("1Y");
-  const [points, setPoints] = useState<EquityPoint[]>([]);
+  const [range, setRange] = useState<RangeKey>("3M");
   const [updatedOn, setUpdatedOn] = useState<string>("—");
 
   const lastKeyRef = useRef<string>("");
@@ -53,16 +29,10 @@ export default function PerformanceChartCard() {
     if (lastKeyRef.current === key) return;
     lastKeyRef.current = key;
 
-    setPoints(cleaned);
     setUpdatedOn(last?.d ?? "—");
   }, []);
 
-  const perf5D = useMemo(() => perfFromLookback(points, 5), [points]);
-  const perf1M = useMemo(() => perfFromLookback(points, 21), [points]);
-  const perf3M = useMemo(() => perfFromLookback(points, 63), [points]);
-  const perfSI = useMemo(() => perfSinceInception(points), [points]);
-
-  const ranges: RangeKey[] = ["5D", "1M", "3M", "6M", "1Y", "ALL"];
+  const ranges: RangeKey[] = ["5D", "1M", "3M", "ALL"];
 
   return (
     <section className={styles.chartCard}>
@@ -104,25 +74,6 @@ export default function PerformanceChartCard() {
           rebaseTo100={true}
           onData={handleChartData}
         />
-      </div>
-
-      <div className={styles.statsRow}>
-        <div className={styles.stat}>
-          <div className={styles.k}>5D</div>
-          <div className={styles.v}>{pctPtsStr(perf5D)}</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.k}>1M</div>
-          <div className={styles.v}>{pctPtsStr(perf1M)}</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.k}>3M</div>
-          <div className={styles.v}>{pctPtsStr(perf3M)}</div>
-        </div>
-        <div className={styles.stat}>
-          <div className={styles.k}>Since 9/18/25</div>
-          <div className={styles.v}>{pctPtsStr(perfSI)}</div>
-        </div>
       </div>
     </section>
   );
