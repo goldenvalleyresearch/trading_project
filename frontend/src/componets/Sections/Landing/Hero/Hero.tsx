@@ -10,10 +10,10 @@ type HeroProps = {
 };
 
 type Candle = {
-  o: number; // open
-  h: number; // high
-  l: number; // low
-  c: number; // close
+  o: number;
+  h: number;
+  l: number;
+  c: number;
 };
 
 export default function Hero({
@@ -45,7 +45,7 @@ export default function Hero({
     // volatility / wick
     { o: 111, h: 114, l: 109, c: 112 },
 
-    // pullback (2 reds, but higher low than prior pullback)
+    // pullback (2 reds, higher low)
     { o: 112, h: 113, l: 109, c: 110 },
     { o: 110, h: 111, l: 107, c: 108 },
 
@@ -82,26 +82,59 @@ export default function Hero({
   const bodyW = Math.max(7, Math.min(12, step * 0.55));
   const x = (i: number) => PAD_X + i * step + step * 0.5;
 
-  // Timing:
-  // - candles print during first ~78% of the loop
-  // - chart clears instantly at ~79%
-  // - remainder is empty pause
-  const candleDelay = 0.32;
-  const holdAfter = 1.0;
+  // ✅ JS-driven loop (no CSS looping for candle existence)
+  const candleDelayMs = 320; // speed of printing each candle
+  const holdMs = 1000;       // hold full chart
+  const pauseMs = 1200;      // empty pause after clearing
 
-  const printHold = n * candleDelay + holdAfter;
-  const total = printHold / 0.79;
-
-  // ✅ This forces a hard remount each loop so candles truly restart from blank
-  const [cycle, setCycle] = React.useState(0);
+  const [visibleCount, setVisibleCount] = React.useState(0);
+  const [cycle, setCycle] = React.useState(0); // forces dot pulse restart cleanly
 
   React.useEffect(() => {
-    const id = window.setInterval(() => {
-      setCycle((c) => c + 1);
-    }, total * 1000);
+    let cancelled = false;
+    const timeouts: number[] = [];
 
-    return () => window.clearInterval(id);
-  }, [total]);
+    const schedule = (fn: () => void, ms: number) => {
+      const id = window.setTimeout(() => {
+        if (!cancelled) fn();
+      }, ms);
+      timeouts.push(id);
+    };
+
+    const run = () => {
+      // start from blank
+      setVisibleCount(0);
+
+      // print candles 1-by-1
+      for (let i = 1; i <= n; i++) {
+        schedule(() => setVisibleCount(i), i * candleDelayMs);
+      }
+
+      const printedAt = n * candleDelayMs;
+
+      // hold full chart
+      schedule(() => {}, printedAt + holdMs);
+
+      // clear ALL at once
+      schedule(() => setVisibleCount(0), printedAt + holdMs);
+
+      // pause empty, then restart
+      schedule(() => {
+        setCycle((c) => c + 1);
+        run();
+      }, printedAt + holdMs + pauseMs);
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+      timeouts.forEach((id) => window.clearTimeout(id));
+    };
+  }, [n]);
+
+  const visibleCandles = candles.slice(0, visibleCount);
+  const lastIdx = Math.max(0, visibleCount - 1);
 
   return (
     <section className={styles.hero} aria-label="Hero">
@@ -128,16 +161,7 @@ export default function Hero({
           ) : null}
         </div>
 
-        <div
-          className={styles.candleWrap}
-          style={
-            {
-              ["--loop" as any]: `${total}s`,
-              ["--delayStep" as any]: `${candleDelay}s`,
-            } as React.CSSProperties
-          }
-          aria-hidden="true"
-        >
+        <div className={styles.candleWrap} aria-hidden="true">
           <svg
             className={styles.candleSvg}
             viewBox={`0 0 ${W} ${H}`}
@@ -168,9 +192,9 @@ export default function Hero({
               })}
             </g>
 
-            {/* ✅ KEY FIX: remount this whole group each loop */}
-            <g key={cycle} className={styles.candlesGroup}>
-              {candles.map((d, i) => {
+            {/* candles that actually exist only when “printed” */}
+            <g className={styles.candlesGroup}>
+              {visibleCandles.map((d, i) => {
                 const cx = x(i);
                 const yO = y(d.o);
                 const yC = y(d.c);
@@ -184,11 +208,7 @@ export default function Hero({
                 const up = d.c >= d.o;
 
                 return (
-                  <g
-                    key={i}
-                    className={styles.candle}
-                    style={{ ["--i" as any]: i } as React.CSSProperties}
-                  >
+                  <g key={i} className={styles.candle}>
                     <line x1={cx} y1={yH} x2={cx} y2={yL} className={styles.wick} />
                     <rect
                       x={cx - bodyW / 2}
@@ -202,13 +222,16 @@ export default function Hero({
                 );
               })}
 
-              {/* current marker restarts cleanly too */}
-              <circle
-                cx={x(n - 1)}
-                cy={y(candles[n - 1].c)}
-                r="4.5"
-                className={styles.currentDot}
-              />
+              {/* current marker follows last printed candle */}
+              {visibleCount > 0 ? (
+                <circle
+                  key={cycle} // restart pulse each cycle
+                  cx={x(lastIdx)}
+                  cy={y(candles[lastIdx].c)}
+                  r="4.5"
+                  className={styles.currentDot}
+                />
+              ) : null}
             </g>
           </svg>
         </div>
