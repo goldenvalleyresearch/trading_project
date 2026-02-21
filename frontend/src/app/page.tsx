@@ -6,6 +6,8 @@ import styles from "./page.module.css";
 import Header from "../componets/UI/Header_bar/Header_bar";
 import Footer from "../componets/UI/Footer/Footer";
 import Hero from "../componets/Sections/Landing/Hero/Hero";
+import Pillars from "../componets/Sections/Pillars/Pillars";
+
 
 import { BRAND_NAME, LINKS } from "../lib/site";
 import { getPortfolioSummaryForUI } from "../lib/portfolio";
@@ -51,6 +53,7 @@ export default function Home() {
 
       <main className={styles.main}>
         <Hero asOf={asOf} />
+        <Pillars />
       </main>
 
       <Footer />

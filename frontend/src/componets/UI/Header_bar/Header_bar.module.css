@@ -32,13 +32,16 @@
   height: 84px;
   border-radius: 20px;
   position: relative;
-  overflow: visible;
+  overflow: hidden; /* CHANGE from visible -> hidden */
   flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .logo {
   object-fit: contain;
-  transform: none;
+  transform: scale(1.35); /* ADD this (try 1.25–1.5) */
+  transform-origin: center;
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
 }
 

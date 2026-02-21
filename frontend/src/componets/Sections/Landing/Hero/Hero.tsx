@@ -18,7 +18,7 @@ type Candle = {
 
 export default function Hero({
   title = "Generating Alpha\nThrough\nAnalysis",
-  subtitle = "A research-driven tool designed to surface high-quality stock setups by aligning fundamental strength and technical signals in the same direction, with a disciplined focus on risk.",
+  subtitle = "A transparent portfolio and research journal documenting decision-making, performance, and continuous process refinement in pursuit of disciplined, risk-aware alpha",
   asOf,
 }: HeroProps) {
   // Curated sequence: trending up with real runs + real pullbacks
