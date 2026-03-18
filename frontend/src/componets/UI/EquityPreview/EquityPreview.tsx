@@ -535,7 +535,7 @@ export default function EquityPreview({
 
           {/* REAL tooltip (your previous content={() => null} suppressed it) */}
           <Tooltip
-            labelFormatter={(label) => tooltipLabelFromMs(Number(label))}
+            labelFormatter={(label) => tooltipLabelFromMs(parseDayToUtcMs(String(label)))}
             formatter={(value, name) => {
               if (name === "pGlow") return null; // <-- hides the gray duplicate row
 
